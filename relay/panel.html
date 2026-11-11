@@ -1,0 +1,190 @@
+<!doctype html>
+<!-- Copyright (C) 2026 eikira. SPDX-License-Identifier: GPL-3.0-or-later -->
+<html lang="en" translate="no"><head><meta charset="utf-8"><meta name="google" content="notranslate"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SimpleVoice OBS</title>
+<style>
+:root{color-scheme:light dark;--b:#8884;--ok:#1a8f3c;--bad:#c62828;--warn:#b26a00}
+body{font:15px/1.5 system-ui,Segoe UI,sans-serif;max-width:760px;margin:24px auto;padding:0 16px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:26px 0 8px}
+.card{border:1px solid var(--b);border-radius:10px;padding:12px 14px;margin:8px 0}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.grow{flex:1;min-width:120px}
+button,input,textarea,select{font:inherit;padding:6px 10px;border-radius:6px;border:1px solid var(--b);background:transparent;color:inherit}
+button{cursor:pointer}button.main{background:#2563eb;color:#fff;border-color:#2563eb}
+textarea{width:100%;box-sizing:border-box}
+.pill{display:inline-block;padding:1px 10px;border-radius:99px;font-weight:600}
+.ready{background:var(--ok);color:#fff}.starting{background:var(--warn);color:#fff}.bad{background:var(--bad);color:#fff}
+.small{font-size:13px;opacity:.75}.warn{color:var(--warn)}code{background:var(--b);padding:1px 5px;border-radius:4px}
+.off{opacity:.45}
+pre{max-height:180px;overflow:auto;font-size:12px;white-space:pre-wrap}
+</style></head><body>
+<h1>SimpleVoice OBS</h1>
+<div class="small">Free and open source (GPL-3.0). Voice model: OmniVoice, for non-commercial use.</div>
+
+<h2>Engine</h2>
+<div class="card"><div class="row"><span id="state" class="pill starting">...</span><span id="msg" class="grow"></span>
+<button id="restart">Restart engine</button></div>
+<div class="small warn" id="enote"></div>
+<div class="row" style="margin-top:8px"><label for="mode"><b>Engine</b></label>
+<select id="mode" class="grow">
+<option value="auto">Automatic: graphics card if there is one, otherwise processor</option>
+<option value="gpu">Graphics card (NVIDIA): best quality, can clone voices</option>
+<option value="cpu">Processor only: works on any PC, built-in voices only</option></select>
+<button id="apply">Apply and restart</button></div>
+<div class="row" style="margin-top:8px"><label for="quality"><b>Voice quality</b></label>
+<select id="quality" class="grow">
+<option value="16">Fast (16 steps): quicker, can sound rougher</option>
+<option value="32">Normal (32 steps)</option>
+<option value="48">High (48 steps): slower, cleaner</option></select></div>
+<div class="row" style="margin-top:8px"><label for="lang"><b>Language</b></label><select id="lang" class="grow"></select></div>
+<div class="row" style="margin-top:8px"><label><input type="checkbox" id="numbers"> <b>Write numbers as words</b> (English): "3 cats" is read as "three cats"</label></div>
+<div class="small" id="optnote">These apply to the graphics card engine, from the next sentence.</div>
+<div class="small" id="asr" style="margin-top:6px"></div>
+<details><summary class="small">Engine log</summary><pre id="log"></pre>
+<button id="copylog" class="small">Copy log</button></details></div>
+
+<h2>Connect the extension</h2>
+<div class="card">In the <b>VoiceStudio+SimpleVoice OBS Connector</b> extension settings set <b>VoiceStudio address</b> to <code id="addr"></code> and keep the <b>Relay address</b> as it is. Then copy the OBS Browser Source URL from the extension into OBS as before.</div>
+
+<h2>Voices</h2>
+<details id="vdet"><summary id="vsum" class="small">Voices</summary><div id="voices"></div></details>
+<div class="row" style="margin-top:8px"><button id="openDir">Open voices folder</button><span class="small" id="dir"></span></div>
+
+<h2>Add a voice</h2>
+<form id="add" class="card">
+<div class="row"><input class="grow" id="name" placeholder="Name, for example Anna" maxlength="60">
+<input class="grow" id="file" type="file" accept=".wav,.flac,.mp3,.aac,.m4a,.ogg,.opus,audio/*" required></div>
+<p class="small">WAV, FLAC, MP3, AAC, M4A or OGG: a clean recording of one speaker. 3 to 10 seconds works best; up to 20 seconds is accepted and longer recordings are refused. No music. Cloning needs the graphics card engine. The words are written down automatically for you to check.</p>
+<div class="row"><button class="main" id="import">Import</button><span id="addmsg"></span></div>
+</form>
+<div id="review" class="card" hidden>
+<b>Check the words</b>
+<p class="small">Listen, and fix the text so it matches exactly what is said. Better text gives a better voice.</p>
+<audio id="rau" controls style="width:100%"></audio>
+<textarea id="rtext" rows="3" maxlength="2000"></textarea>
+<div class="small warn" id="rnote"></div>
+<div class="row" style="margin-top:8px"><button class="main" id="rsave">Save voice</button><button id="rcancel">Cancel</button><span id="rmsg"></span></div>
+</div>
+
+<h2>Test</h2>
+<div class="card">
+<div class="row"><label for="tv"><b>Voice</b></label><select id="tv" class="grow"></select>
+<label for="ts"><b>Speed</b></label>
+<select id="ts"><option value="0.5">0.5 slowest</option><option>0.6</option><option>0.7</option><option>0.8</option><option>0.9</option><option value="1.0" selected>1.0 normal</option><option>1.1</option><option>1.2</option><option>1.3</option><option>1.4</option><option value="1.5">1.5 fastest</option></select></div>
+<p class="small">Voice: who speaks. Speed: how fast, 1.0 is normal speaking speed. <span id="spnote"></span></p>
+<textarea id="tt" rows="2" style="margin-top:8px">Hello! This is a test of the voice.</textarea>
+<div class="row" style="margin-top:8px"><button id="gen" class="main">Generate</button><button id="go" disabled>Play</button><span id="tres"></span>
+<span class="grow"></span><select id="sfmt" title="File format"></select><button id="save" disabled>Save</button></div>
+<div class="small" id="fmtnote">Made as WAV: mono, 16-bit, 24 kHz. Saved files are always mono and 24 kHz; MP3 and AAC use 128 kbps.</div>
+<audio id="au" hidden></audio></div>
+
+<script>
+const $=id=>document.getElementById(id),H={'X-Relay-Panel':'1'},J=o=>JSON.stringify(o);
+let S=null;
+let editing=false,busyReview=false,draft='';
+$('addr').textContent=location.origin;
+function el(t,c,x){const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+async function refresh(){
+  let s;try{s=await (await fetch('/api/status',{cache:'no-store'})).json()}catch{ $('state').textContent='no connection';$('state').className='pill bad';return}
+  const e=s.engine,st=$('state');st.textContent=e.state;st.className='pill '+(e.state=='ready'?'ready':e.state=='starting'?'starting':'bad');
+  $('msg').textContent=e.message+(e.device?' ('+e.device+')':'');$('log').textContent=e.log.length?e.log.join('\n'):'No messages yet. Messages appear here while the engine starts and when something goes wrong.';$('dir').textContent=s.voicesDir;
+  $('enote').textContent=e.note||'';
+  if(document.activeElement!==$('mode'))$('mode').value=e.mode;
+  S=s;{const lg=$('lang');if(!lg.options.length)for(const l of s.languages)lg.append(new Option(l.Name,l.Code));if(document.activeElement!==lg)lg.value=s.language||'';
+  const nb=$('numbers');if(document.activeElement!==nb)nb.checked=!!s.numbers;
+  const off=e.kind=='cpu';for(const id of ['quality','lang','numbers']){$(id).disabled=off;$(id).closest('.row').classList.toggle('off',off)}
+  $('optnote').textContent=off?'The processor engine is running. These options only apply to the graphics card engine.':'These apply to the graphics card engine, from the next sentence.';
+  const sf=$('sfmt');if(sf.options.length!==s.formats.length||[...sf.options].some((o,i)=>o.value!==s.formats[i])){sf.textContent='';for(const f of s.formats)sf.append(new Option(f.toUpperCase(),f))}}
+  const q=$('quality');if(document.activeElement!==q){if(![...q.options].some(o=>+o.value===s.steps))q.append(new Option('Custom ('+s.steps+' steps, set in settings.txt)',s.steps));q.value=s.steps}
+  $('asr').textContent=e.transcription=='ready'?'Writing down recordings: ready.':e.transcription=='error'?'Writing down recordings is not available: '+(e.transcriptionError||'unknown problem')+' Type the words in yourself.':'Writing down recordings: loading the model, this takes a minute after start...';
+  const cpu=e.kind=='cpu';
+  {const ts=$('ts'),ref=!cpu&&!(s.samples||[]).some(n=>n.toLowerCase()===$('tv').value.toLowerCase());for(const o of ts.options){o.hidden=o.disabled=ref&&parseFloat(o.value)<0.8}
+   if(ref&&parseFloat(ts.value)<0.8)ts.value='0.8';
+   $('spnote').textContent=ref?'Imported voices go down to 0.8 only: slower speeds make the recording leak into the speech.':''}
+  const tv=$('tv'),cur=tv.value;tv.textContent='';
+  for(const n of s.speakable)tv.append(el('option',null,n));
+  if(!s.speakable.length)tv.append(el('option',null,'(no voices yet)'));
+  if(cur)tv.value=cur;
+  if(editing||busyReview)return;
+  $('vsum').textContent='Voices ('+s.voices.length+') - click to show';
+  const box=$('voices');box.textContent='';
+  if(cpu)box.append(el('div','card small warn','The processor engine is running. It speaks with these built-in voices: '+s.builtin.join(', ')+'. Your cloned voices (below) need the graphics card engine.'));
+  if(!s.voices.length)box.append(el('div','card small','No voices yet. Add one below.'));
+  for(const v of s.voices){
+    const c=el('div','card'),r=el('div','row');
+    r.append(el('b','grow',v.name),el('span','small',v.seconds.toFixed(1)+' s'));
+    const ed=el('button',null,v.transcript?'Edit words':'Transcribe');ed.onclick=()=>edit(c,v);
+    const rn=el('button',null,'Rename');rn.onclick=async()=>{const n=prompt('New name for the voice "'+v.name+'":',v.name);if(n===null||n.trim()===v.name)return;
+      const j=await (await fetch('/api/voices/rename',{method:'POST',headers:{...H,'Content-Type':'application/json'},body:JSON.stringify({name:v.name,newName:n})})).json();if(!j.ok)alert(j.error);refresh()};
+    const d=el('button',null,'Delete');d.onclick=async()=>{if(!confirm('Delete voice '+v.name+'?'))return;
+      await fetch('/api/voices/delete',{method:'POST',headers:H,body:JSON.stringify({name:v.name})});refresh()};
+    r.append(ed,rn,d);c.append(r);
+    if(v.transcript)c.append(el('div','small','"'+v.transcript+'"'));
+    if(v.note)c.append(el('div','small warn',v.note));
+    box.append(c);
+  }
+}
+$('apply').onclick=async()=>{$('apply').disabled=true;await fetch('/api/engine/mode',{method:'POST',headers:{...H,'Content-Type':'application/json'},body:J({mode:$('mode').value})});$('apply').disabled=false;refresh()};
+$('quality').onchange=async()=>{await fetch('/api/engine/quality',{method:'POST',headers:{...H,'Content-Type':'application/json'},body:J({steps:+$('quality').value})});refresh()};
+$('lang').onchange=$('numbers').onchange=async()=>{await fetch('/api/engine/options',{method:'POST',headers:{...H,'Content-Type':'application/json'},body:J({language:$('lang').value,numbers:$('numbers').checked})});refresh()};
+$('copylog').onclick=()=>navigator.clipboard&&navigator.clipboard.writeText($('log').textContent);
+$('restart').onclick=async()=>{await fetch('/api/engine/restart',{method:'POST',headers:H});refresh()};
+$('openDir').onclick=()=>fetch('/api/open-voices',{method:'POST',headers:H});
+$('file').onchange=()=>{const f=$('file').files[0];if(f&&!$('name').value)$('name').value=f.name.replace(/\.[^.]*$/,'').replace(/[^\p{L}\p{N} _.-]/gu,'').slice(0,60)};
+$('add').onsubmit=async ev=>{ev.preventDefault();const m=$('addmsg');m.className='';m.textContent='Converting and listening... this can take a few seconds.';$('import').disabled=true;
+  const fd=new FormData();fd.append('audio',$('file').files[0]);
+  try{const r=await fetch('/api/voices/draft',{method:'POST',headers:H,body:fd});const j=await r.json();
+    if(!j.ok){m.textContent=j.error;m.className='warn';return}
+    draft=j.draft;busyReview=true;m.textContent='';$('rau').src='/api/voices/draft/'+draft+'.wav';$('rtext').value=j.transcript;
+    $('rnote').textContent=j.note||'';$('rmsg').textContent='';$('review').hidden=false;$('add').hidden=true}
+  catch(e){m.textContent='Failed: '+e;m.className='warn'}finally{$('import').disabled=false}};
+const closeReview=()=>{busyReview=false;$('review').hidden=true;$('add').hidden=false;$('add').reset();$('rau').removeAttribute('src');refresh()};
+$('rcancel').onclick=async()=>{await fetch('/api/voices/draft/discard',{method:'POST',headers:H,body:J({draft})});closeReview()};
+$('rsave').onclick=async()=>{const r=await fetch('/api/voices',{method:'POST',headers:H,body:J({draft,name:$('name').value,transcript:$('rtext').value})});
+  const j=await r.json();if(!j.ok){$('rmsg').textContent=j.error;$('rmsg').className='warn';return}closeReview()};
+function edit(card,v){editing=true;card.textContent='';card.append(el('b',null,v.name));
+  const t=el('textarea');t.rows=3;t.value=v.transcript||'';t.maxLength=2000;card.append(t);
+  const m=el('span','small'),row=el('div','row');
+  const save=el('button','main','Save'),re=el('button',null,'Transcribe again'),no=el('button',null,'Cancel');
+  const done=()=>{editing=false;refresh()};
+  save.onclick=async()=>{const j=await(await fetch('/api/voices/transcript',{method:'POST',headers:H,body:J({name:v.name,transcript:t.value})})).json();j.ok?done():(m.textContent=j.error,m.className='small warn')};
+  re.onclick=async()=>{m.textContent='Listening...';m.className='small';re.disabled=true;
+    const j=await(await fetch('/api/voices/transcribe',{method:'POST',headers:H,body:J({name:v.name})})).json();re.disabled=false;
+    if(j.ok){t.value=j.transcript;m.textContent='Check the text, then save.'}else{m.textContent=j.error;m.className='small warn'}};
+  no.onclick=done;row.append(save,re,no,m);card.append(row);if(!v.transcript)re.click()}
+// Generate always makes a new result. Play/Stop replays the last result without making it again.
+let last=null; // {key, url, blob, name, secs}
+const au=$('au');
+const testKey=()=>J([$('tv').value,$('ts').value,$('tt').value,S&&S.steps,S&&S.language,S&&S.numbers,S&&S.engine.kind]);
+const playing=()=>!au.paused&&!au.ended;
+function label(){$('go').textContent=playing()?'Stop':'Play'}
+au.onplay=au.onpause=au.onended=label;
+$('tv').onchange=()=>refresh();
+$('gen').onclick=async()=>{
+  const m=$('tres'),key=testKey(),t=performance.now();
+  m.textContent='Working...';m.className='';$('gen').disabled=true;au.pause();
+  try{const r=await fetch('/v1/audio/speech',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'omnivoice',input:$('tt').value,voice:$('tv').value,response_format:'wav',speed:parseFloat($('ts').value)})});
+    if(!r.ok){m.textContent=(await r.json()).error;m.className='warn';return}
+    const blob=await r.blob();if(last)URL.revokeObjectURL(last.url);
+    last={key,blob,url:URL.createObjectURL(blob),name:$('tv').value.replace(/[^\p{L}\p{N} _-]/gu,'').trim()||'voice',secs:(performance.now()-t)/1000};
+    au.src=last.url;$('save').disabled=false;$('go').disabled=false;
+    await new Promise(ok=>{au.onloadedmetadata=ok;setTimeout(ok,2000)});
+    m.textContent='Made in '+last.secs.toFixed(2)+' s, audio is '+au.duration.toFixed(1)+' s long';
+    au.currentTime=0;au.play().catch(()=>{})}
+  catch(e){m.textContent='Failed: '+e;m.className='warn'}
+  finally{$('gen').disabled=false;label()}};
+$('go').onclick=()=>{
+  if(!last)return;
+  if(playing()){au.pause();au.currentTime=0;label();return}
+  $('tres').className='';
+  $('tres').textContent=last.key===testKey()?'Playing the last result.':'Playing the previous result. Press Generate to make it with the current settings.';
+  au.currentTime=0;au.play().catch(()=>{})};
+$('save').onclick=async()=>{if(!last)return;const f=$('sfmt').value,m=$('tres');let blob=last.blob;
+  if(f!=='wav'){$('save').disabled=true;m.textContent='Making '+f.toUpperCase()+'...';
+    const r=await fetch('/api/convert?format='+f,{method:'POST',headers:H,body:last.blob});$('save').disabled=false;
+    if(!r.ok){m.textContent=(await r.json()).error;m.className='warn';return}blob=await r.blob();m.textContent=''}
+  const d=new Date(),p2=n=>String(n).padStart(2,'0'),a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=last.name+'-'+d.getFullYear()+p2(d.getMonth()+1)+p2(d.getDate())+'-'+p2(d.getHours())+p2(d.getMinutes())+'.'+f;
+  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),10000)};
+refresh();setInterval(refresh,3000);
+</script></body></html>

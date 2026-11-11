@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en" translate="no">
+<head>
+<meta charset="utf-8">
+<meta name="google" content="notranslate">
+<title>SimpleVoice OBS Setup {{BUILD}}</title>
+<style>
+:root{color-scheme:light dark;--line:#8885;--acc:#2563eb}
+body{font:15px/1.5 system-ui,"Segoe UI",sans-serif;max-width:700px;margin:0 auto;padding:22px 20px}
+h1{font-size:24px;margin:0}.sub{opacity:.7;margin:0 0 14px}
+.box{border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin:12px 0}
+button{font:inherit;padding:8px 20px;border-radius:8px;border:1px solid var(--line);background:transparent;color:inherit;cursor:pointer}
+button.main{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+button:disabled{opacity:.45;cursor:default}
+label{display:block;margin:5px 0}
+.bar{height:10px;border-radius:5px;background:var(--line);overflow:hidden;margin:10px 0}
+.bar div{height:100%;width:0;background:var(--acc);transition:width .6s}
+.err{color:#d32f2f}.ok{color:#1b873f}.small{font-size:13px;opacity:.75}
+pre{height:240px;overflow:auto;white-space:pre-wrap;font-size:12px;background:#0003;padding:8px;border-radius:6px}
+[hidden]{display:none!important}
+.row{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0}.row label{flex:1;margin:0}.row .sz{white-space:nowrap;text-align:right;min-width:90px}
+.row .d{display:block;font-size:12.5px;opacity:.7}.tag{color:#1b873f;font-size:12.5px}
+.vox{margin:0 0 6px 26px;padding:6px 0 4px;font-size:13.5px}.vox .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0 10px}
+.vox label{margin:2px 0}.vox .gray{opacity:.5}.vox .z{opacity:.65}
+.licence{border:2px solid #d9534f66}
+.nogpu{border:2px solid #d97706;background:#d9770622;border-radius:10px;padding:10px 14px;margin:12px 0;font-weight:600}
+.nogpu span{display:block;font-weight:400;margin-top:4px}
+.i{display:inline-block;width:17px;height:17px;line-height:17px;text-align:center;border:1px solid var(--line);border-radius:50%;font-size:12px;cursor:help;margin-left:6px}
+.total{margin-top:8px;font-weight:600}a{color:var(--acc)}
+</style>
+</head>
+<body>
+<h1>SimpleVoice OBS <span class="small">Setup {{BUILD}}</span></h1>
+<p class="sub">Read chat aloud in cloned voices, for OBS. Free and open source.</p>
+
+<div id="installed" class="box" hidden>
+  <b>SimpleVoice OBS is installed.</b>
+  <p><button class="main" id="open">Open SimpleVoice OBS</button></p>
+</div>
+
+<div id="form">
+  <div class="nogpu" id="nogpu" hidden></div>
+  <div class="box" id="parts">
+    <b>What to install</b>
+    <div id="rows"></div>
+    <div id="total" class="total"></div>
+    <div class="small" id="gpunote"></div>
+    <p class="small">Sizes are estimates. Parts that are already installed are not downloaded again. Install folder: <code id="dir"></code></p>
+    <p class="small"><a href="#" id="pAll">Everything</a> &middot; <a href="#" id="pCpu">Smallest (processor engine only)</a></p>
+  </div>
+  <div class="box licence">
+    <p>The voice model (OmniVoice) is licensed CC-BY-NC: use it for <b>non-commercial purposes only</b>. Only clone voices you are allowed to clone.</p>
+    <label><input type="checkbox" id="ok"> I understand and will use it for non-commercial purposes only.</label>
+  </div>
+  <div class="box">
+    <label><input type="checkbox" id="desktop" checked> Create a desktop shortcut</label>
+    <label><input type="checkbox" id="auto"> Start SimpleVoice OBS when Windows starts</label>
+    <label><input type="checkbox" id="launch" checked> Open SimpleVoice OBS when setup is finished</label>
+  </div>
+  <p><button class="main" id="go" disabled>Install</button></p>
+</div>
+
+<div id="progress" hidden>
+  <div class="box">
+    <b id="step">Starting...</b>
+    <div class="bar"><div id="fill"></div></div>
+    <div class="small" id="last"></div>
+    <p class="small">Large downloads take a while. If a firewall asks, click Allow. Do not close this window: closing it stops setup and removes what was installed so far.</p>
+  </div>
+</div>
+
+<div id="done" class="box" hidden>
+  <b class="ok" id="donetitle"></b>
+  <div id="donehelp">
+    <p>Next steps:</p>
+    <ol>
+      <li>In the control panel that opens, add your own voice: a clean recording of one speaker. 3 to 10 seconds works best; up to 20 seconds is accepted. The sample voices you ticked are already there.</li>
+      <li>In the VoiceStudio+SimpleVoice OBS Connector extension settings set <i>VoiceStudio address</i> to <code>http://127.0.0.1:8787</code>.</li>
+      <li>Keep your OBS Browser Source URL as it is.</li>
+    </ol>
+    <p><button class="main" id="open2">Open SimpleVoice OBS</button> <button id="close">Close</button></p>
+  </div>
+  <p><button id="close2" hidden>Close</button></p>
+</div>
+
+<div id="failed" class="box" hidden>
+  <b class="err">It did not work.</b>
+  <p id="reason"></p>
+  <p><button class="main" id="retry">Try again</button> <button id="copy">Copy log</button></p>
+</div>
+
+<details class="box" id="logbox"><summary>Details</summary><pre id="log"></pre>
+  <div class="small"><b>Internet access.</b> If a firewall blocks setup, allow these programs to reach these sites:<ul id="access"></ul></div></details>
+
+<details class="box" id="rmbox"><summary>Uninstall</summary>
+  <p>Removes SimpleVoice OBS, Python, PyTorch, OmniVoice, the model, the shortcuts and the Windows entries.</p>
+  <label><input type="checkbox" id="vox"> Also delete my voices</label>
+  <p><button id="rm">Uninstall</button></p></details>
+
+<script>
+const $ = id => document.getElementById(id), H = {"X-Setup": "1"};
+let next = 0, step = [0, 8, ""], launched = false, accessShown = false, wantLaunch = true, last = "";
+const chosen = {cpu: true, gpu: true, asr: true}, vchosen = {};
+let voiceList = [], vgot = false;
+let comp = "", libs = null, hw = null, planned = {diskMB: 0, downloadMB: 0}, gotHw = false;
+const gb = mb => (mb / 1024).toFixed(mb < 1024 ? 2 : 1) + " GB";
+const post = (u, b) => fetch(u, {method: "POST", headers: H, body: JSON.stringify(b || {})});
+const show = (id, on) => $(id).hidden = !on;
+const canGo = () => {
+  const room = hw && hw.freeMB >= 0 ? hw.freeMB >= planned.diskMB + 1024 : true;
+  const engine = chosen.cpu || chosen.gpu || (comp && JSON.parse(comp).some(c => c.installed && (c.id == "cpu" || c.id == "gpu")));
+  $("go").disabled = !($("ok").checked && engine && room);
+};
+$("ok").onchange = canGo;
+async function replan() {
+  planned = await (await fetch("/plan?cpu=" + +chosen.cpu + "&gpu=" + +chosen.gpu + "&asr=" + +chosen.asr)).json();
+  const free = hw && hw.freeMB >= 0 ? hw.freeMB : null, t = $("total");
+  t.textContent = "Needs about " + gb(planned.diskMB) + " on disk and downloads about " + gb(planned.downloadMB) +
+    (free === null ? "." : ". Free on this drive: " + gb(free) + ".");
+  const bad = free !== null && free < planned.diskMB + 1024;
+  t.className = "total" + (bad ? " err" : "");
+  if (bad) t.textContent += " That is not enough: free some space or untick a part.";
+  if (!chosen.cpu && !chosen.gpu) t.textContent += " Tick at least one engine.";
+  canGo(); rows();
+}
+let built = "";
+function rows() {
+  if (!comp) return;
+  const list = JSON.parse(comp), box = $("rows");
+  if (built !== comp) {          // build the rows once; later changes only update the boxes and sizes
+    built = comp; box.textContent = "";
+    for (const c of list) {
+      const row = document.createElement("div"); row.className = "row";
+      const lab = document.createElement("label"), cb = document.createElement("input");
+      cb.type = "checkbox"; cb.id = "c_" + c.id; cb.disabled = c.required || (!usable() && (c.id == "gpu" || c.id == "asr"));
+      cb.onchange = () => { chosen[c.id] = cb.checked; replan(); };
+      const d = document.createElement("span"); d.className = "d"; d.textContent = c.detail;
+      lab.append(cb, " " + c.name, d);
+      const sz = document.createElement("div"); sz.className = "sz"; sz.id = "s_" + c.id;
+      row.append(lab, sz); box.append(row);
+      if (c.id == "gpu") { const vb = document.createElement("details"); vb.className = "vox"; vb.id = "vbox"; const sm = document.createElement("summary"); sm.id = "vsum"; const vin = document.createElement("div"); vin.id = "vin"; vb.append(sm, vin); box.append(vb); }
+    }
+  }
+  voices(list);
+  for (const c of list) {
+    let mb = c.diskMB, extra = "";
+    if (c.id == "asr" && !chosen.gpu && !libs.installed) extra = " + " + gb(libs.diskMB) + " PyTorch";
+    if (c.id == "gpu" && libs.installed) mb -= libs.diskMB;
+    $("c_" + c.id).checked = c.required || (!!chosen[c.id] && (usable() || (c.id != "gpu" && c.id != "asr")));
+    $("s_" + c.id).innerHTML = c.installed ? '<span class="tag">installed</span>' : "";
+    if (!c.installed) $("s_" + c.id).textContent = !usable() && (c.id == "gpu" || c.id == "asr") ? "not available" : "about " + gb(mb) + extra;
+  }
+}
+const usable = () => !hw || hw.gpuUsable !== false;
+const cpuOn = list => chosen.cpu || list.some(c => c.id == "cpu" && c.installed);
+let vbuilt = "";
+function voices(list) {
+  const vb = $("vbox"); if (!vb) return;
+  const on = cpuOn(list), key = JSON.stringify(voiceList.map(v => [v.name, v.state]));
+  if (vbuilt !== key) {
+    vbuilt = key; $("vin").textContent = "";
+    const head = document.createElement("div");
+    head.innerHTML = "Sample voices for cloning (made by the processor engine, about 0.4 MB each): <a href='#' id='vAll'>All</a> &middot; <a href='#' id='vNone'>None</a>";
+    const grid = document.createElement("div"); grid.className = "grid";
+    for (const v of voiceList) {
+      const lab = document.createElement("label"), cb = document.createElement("input");
+      cb.type = "checkbox"; cb.id = "v_" + v.name;
+      cb.onchange = () => { vchosen[v.name] = cb.checked; voices(JSON.parse(comp)); };
+      const z = document.createElement("span"); z.className = "z";
+      z.textContent = v.state == "made" ? " (installed)" : v.state == "yours" ? " (already yours)" : "";
+      lab.append(cb, " " + v.name, z); grid.append(lab);
+    }
+    const note = document.createElement("div"); note.className = "small"; note.id = "vnote";
+    $("vin").append(head, grid, note);
+    $("vAll").onclick = e => { e.preventDefault(); if (cpuOn(JSON.parse(comp))) { for (const v of voiceList) vchosen[v.name] = true; voices(JSON.parse(comp)); } };
+    $("vNone").onclick = e => { e.preventDefault(); if (cpuOn(JSON.parse(comp))) { for (const v of voiceList) vchosen[v.name] = false; voices(JSON.parse(comp)); } };
+  }
+  vb.hidden = !usable();
+  vb.classList.toggle("gray", !on);
+  $("vsum").textContent = "Sample voices for the graphics card engine (" + voiceList.filter(v => vchosen[v.name]).length + " of " + voiceList.length + " ticked)";
+  for (const v of voiceList) { const cb = $("v_" + v.name); cb.checked = on && !!vchosen[v.name]; cb.disabled = !on; }
+  $("vnote").textContent = on ? "Unticking a voice that setup made earlier removes it, unless you changed or renamed it." : "Needs the processor engine: tick it above to choose sample voices.";
+}
+$("pAll").onclick = e => { e.preventDefault(); const u = usable(); Object.assign(chosen, {cpu: true, gpu: u, asr: u}); replan(); };
+$("pCpu").onclick = e => { e.preventDefault(); Object.assign(chosen, {cpu: true, gpu: false, asr: false}); replan(); };
+async function start() {
+  wantLaunch = $("launch").checked;
+  const r = await post("/start", {accepted: $("ok").checked, desktop: $("desktop").checked, autostart: $("auto").checked,
+    components: Object.keys(chosen).filter(k => chosen[k]),
+    voices: voiceList.filter(v => vchosen[v.name]).map(v => v.name)});
+  if (!r.ok) $("reason").textContent = await r.text();
+}
+$("go").onclick = $("retry").onclick = start;
+$("open").onclick = $("open2").onclick = () => post("/launch");
+$("close").onclick = $("close2").onclick = () => post("/quit");
+$("copy").onclick = () => navigator.clipboard.writeText($("log").textContent);
+$("rm").onclick = async () => {
+  if (!confirm("Remove SimpleVoice OBS from this PC?")) return;
+  await post("/uninstall", {deleteVoices: $("vox").checked});
+};
+async function poll() {
+  try {
+    const s = await (await fetch("/state?from=" + next)).json();
+    $("dir").textContent = s.dir;
+    hw = s.hardware; libs = s.libs;
+    if (!gotHw && hw) {
+      gotHw = true;
+      chosen.gpu = chosen.asr = hw.gpuUsable;
+      const ng = $("nogpu");
+      if (!hw.gpuUsable) {
+        ng.hidden = false;
+        ng.textContent = hw.gpuFound ? "Your graphics card cannot be used: " + hw.gpuName + "." : "No NVIDIA graphics card was found.";
+        const sub = document.createElement("span");
+        sub.textContent = "The graphics card engine needs an NVIDIA GTX 16 series, RTX 20 series or newer card with 6 GB video memory. Setup continues with the processor engine only: built-in voices, no voice cloning, no transcription. Nothing that only the graphics card engine needs is downloaded." + (hw.gpuFound ? "" : " If you do have an NVIDIA card, install or update its driver and run Setup again.");
+        ng.append(sub);
+      } else {
+        $("gpunote").textContent = "NVIDIA graphics card: " + hw.gpuName + ".";
+        const ic = document.createElement("span"); ic.className = "i"; ic.textContent = "i"; ic.title = hw.info; $("gpunote").append(ic);
+      }
+    }
+    if (!vgot && s.voices) { vgot = true; voiceList = s.voices; for (const v of voiceList) vchosen[v.name] = v.selected; }
+    const cj = JSON.stringify(s.components);
+    if (cj !== comp) { comp = cj; replan(); }
+    if (!accessShown) {
+      accessShown = true;
+      for (const a of s.access) { const li = document.createElement("li"); li.textContent = a.program + ": " + a.hosts.concat(a.also || []).join(", "); $("access").appendChild(li); }
+    }
+    for (const l of s.lines) {
+      $("log").textContent += l + "\n"; last = l;
+      const m = /^Step (\d+) of (\d+): (.*)/.exec(l);
+      if (m) step = [+m[1], +m[2], m[3]];
+    }
+    next = s.next; $("log").scrollTop = $("log").scrollHeight;
+    const running = s.state === "running", uninst = s.mode === "uninstall";
+    show("installed", s.installed && s.state === "idle" && s.focus !== "uninstall");
+    show("form", s.state === "idle" && s.focus !== "uninstall");
+    show("progress", running);
+    show("failed", s.state === "failed");
+    show("done", s.state === "done");
+    $("rmbox").open = $("rmbox").open || s.focus === "uninstall";
+    $("rm").disabled = running || !s.installed;
+    if (running) {
+      $("step").textContent = uninst ? "Removing SimpleVoice OBS..." : "Step " + step[0] + " of " + step[1] + ": " + step[2];
+      $("fill").style.width = uninst ? "60%" : Math.max(3, (step[0] - 0.5) / step[1] * 100) + "%";
+      $("last").textContent = last;
+    }
+    if (s.state === "failed") $("reason").textContent = s.error;
+    if (s.state === "done") {
+      $("donetitle").textContent = uninst ? "SimpleVoice OBS was removed." : "SimpleVoice OBS is installed.";
+      show("donehelp", !uninst); show("close2", uninst);
+      if (!uninst && wantLaunch && !launched) { launched = true; post("/launch"); }
+    }
+  } catch (e) {}
+  setTimeout(poll, 1000);
+}
+poll();
+</script>
+</body>
+</html>

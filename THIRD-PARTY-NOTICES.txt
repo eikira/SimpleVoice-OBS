@@ -1,0 +1,50 @@
+THIRD-PARTY NOTICES for SimpleVoice OBS
+===================================
+
+SimpleVoiceOBSRelay.exe contains the Go standard library and runtime (https://go.dev), used under
+the license below. No other third-party code is compiled into it.
+
+The installer additionally contains, unchanged and each under its own license:
+  - Python 3.11 (PSF License), https://www.python.org
+  - PyTorch and torchaudio (BSD-3-Clause), https://pytorch.org
+  - OmniVoice code by k2-fsa (Apache-2.0), https://github.com/k2-fsa/OmniVoice
+  - The OmniVoice model weights (CC-BY-NC, non-commercial use only), https://huggingface.co/k2-fsa/OmniVoice
+  - ffmpeg (https://ffmpeg.org, LGPL/GPL, source available there), delivered inside the
+    imageio-ffmpeg package (BSD-2-Clause), used to read MP3, FLAC, AAC and other audio
+  - Whisper large-v3-turbo by OpenAI (MIT), https://huggingface.co/openai/whisper-large-v3-turbo,
+    used to write down the words of a new voice recording
+  - Kokoro-82M by hexgrad (Apache-2.0), https://huggingface.co/hexgrad/Kokoro-82M, as the ONNX
+    files from https://github.com/thewh1teagle/kokoro-onnx (MIT): the processor engine and its
+    built-in voices, and the sample voices made with it
+  - kokoro-onnx (MIT), onnxruntime (MIT), phonemizer (GPL-3.0), espeakng-loader and the eSpeak NG
+    speech synthesizer (GPL-3.0+), https://github.com/espeak-ng/espeak-ng
+  - The Python packages that OmniVoice depends on (transformers, huggingface_hub, numpy and
+    others). Their license files are inside runtime\python\Lib\site-packages\<package>-*.dist-info.
+
+Copyright 2009 The Go Authors.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google LLC nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

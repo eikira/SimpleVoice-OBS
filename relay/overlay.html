@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>VoiceStudio+SimpleVoice OBS Connector overlay</title>
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; color: #fff; font: 13px/1.4 system-ui, sans-serif; }
+  #banner { display: none; position: fixed; inset: 0; align-items: center; justify-content: center; background: rgba(0,0,0,.75); cursor: pointer; font-size: 18px; text-align: center; padding: 20px; }
+  #panel { display: none; padding: 10px; }
+  body.debug #panel { display: block; }
+  #log { list-style: none; margin: 8px 0 0; padding: 0; max-height: 70vh; overflow: hidden; }
+  #log li { padding: 1px 0; opacity: .9; }
+  .bad { color: #ff8080; }
+</style>
+</head>
+<body>
+  <div id="banner">Click once to enable audio in this browser<br>(not needed in OBS)</div>
+  <div id="panel">
+    <div id="status">Starting...</div>
+    <div id="stats"></div>
+    <ul id="log"></ul>
+  </div>
+  <script src="overlay.js"></script>
+</body>
+</html>
