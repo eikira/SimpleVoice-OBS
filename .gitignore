@@ -1,6 +1,12 @@
-dist/
-setup/payload/*
-!setup/payload/.gitkeep
+# build output
+/dist/
+/setup/payload/*
+!/setup/payload/.gitkeep
 *.exe
 *.zip
+# tooling
 __pycache__/
+*.pyc
+/relay-test
+.DS_Store
+Thumbs.db
