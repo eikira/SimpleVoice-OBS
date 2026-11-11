@@ -1,0 +1,6 @@
+dist/
+setup/payload/*
+!setup/payload/.gitkeep
+*.exe
+*.zip
+__pycache__/
