@@ -36,7 +36,7 @@ Setup detects this and installs only the processor engine, without downloading a
 
 ## Install
 
-1. Download `SimpleVoice-OBS-Setup-<version>.zip` from the releases page and unzip it.
+1. Download `SimpleVoice-OBS-Setup-<version>-Windows.zip` from the releases page and unzip it.
 2. Double-click `SimpleVoice-OBS-Setup.exe`, tick what you want, accept the licence note, click **Install**.
 3. When it finishes, the control panel opens. Add a voice and press **Generate** in the Test section.
 4. In the **VoiceStudio+SimpleVoice OBS Connector** extension settings set *VoiceStudio address* to `http://127.0.0.1:8787`.
