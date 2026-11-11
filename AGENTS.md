@@ -13,7 +13,7 @@ Owner: eikira. Licence: GPL-3.0. Version 1.0.0 is the first production release.
 |---|---|
 | Product | SimpleVoice OBS |
 | Background program | SimpleVoice OBS Relay (`SimpleVoiceOBSRelay.exe`, tray tooltip) |
-| Installer | `SimpleVoice-OBS-Setup.exe` (shipped in `SimpleVoice-OBS-Setup-<version>.zip`) |
+| Installer | `SimpleVoice-OBS-Setup.exe` (shipped in `SimpleVoice-OBS-Setup-<version>-Windows.zip`) |
 | Chrome extension | VoiceStudio+SimpleVoice OBS Connector (formerly "VoiceStudio OBS Connector"; the rename and re-release are a separate, later job) |
 | Standalone relay for VoiceStudio | VoiceStudio OBS Connector Relay (not renamed; may get a tiny rebuild for the extension name) |
 | Voice model | OmniVoice (this stays the engine name) |
