@@ -28,7 +28,7 @@ import (
 //go:embed worker.py
 var workerPy []byte
 
-const version = "1.0.0"
+const version = "1.0.1"
 
 var logOut io.Writer = os.Stdout
 

@@ -24,7 +24,7 @@ SimpleVoice OBS has three parts that ship together in one installer.
 |---|---|
 | `main.go` | Command line flags, settings file, start-up. `version` constant. |
 | `server.go` | The extension and OBS protocol: `/overlay.html`, `/overlay.js`, `/events` (SSE), `/send`, `/status`, `/tts` (proxy to VoiceStudio), `/info`, `/open-folder`, `/shutdown`. `protocolVersion = 2`. |
-| `speech.go` | VoiceStudio-compatible API (`/v1/audio/speech`, `/v1/audio/voices`, `/v1/models`) and the panel API (`/api/...`). |
+| `speech.go` | VoiceStudio-compatible API (`/v1/audio/speech`, `/v1/audio/voices` (`{id, name, min_speed}`), `/v1/models`) and the panel API (`/api/...`). |
 | `engine.go` | Starts, supervises and talks to `worker.py`. States: starting, ready, error. Modes: `auto`, `gpu`, `cpu`. Automatic fallback to the processor engine when the graphics card engine fails. |
 | `voices.go` | The voices folder: a voice is `Name.wav` plus `Name.txt` (the exact words). Import checks, rename, listing. |
 | `audio.go` | ffmpeg: convert imports to mono WAV, and save formats (MP3, WAV, FLAC, AAC: mono, 24 kHz). |
@@ -77,7 +77,9 @@ A native Windows wizard was planned and is parked; the browser version is the pr
 
 | File | Purpose |
 |---|---|
-| `main.go` | Server, window, endpoints `/state /plan /start /uninstall /launch /quit` |
+| `main.go` | Server, window, endpoints `/state /plan /start /uninstall /launch /quit /bye`; waits for the window (watched process, `presence`, `/quit`) |
+| `presence.go` | Is the page still open: heartbeat (`/state` every second) and the `/bye` beacon; closed (goodbye, not followed by a request) versus lost (long silence) |
+| `browserproc_*.go` | Windows: end the app window processes of this run, and other running Setup copies at start (PowerShell); other systems: nothing |
 | `install.go` | The install steps, downloads with SHA-256 checks and retries, rollback on a failed clean install |
 | `components.go` | Component list with size estimates, hardware detection and the graphics card guide |
 | `inventory.go` | `inventory.json` and the sample voice selection |

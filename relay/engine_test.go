@@ -1316,3 +1316,101 @@ func TestSampleVoiceListMatchesTheWorker(t *testing.T) {
 		t.Fatalf("worker has %v, relay has %v", names, sampleVoiceNames)
 	}
 }
+
+func TestWithEnding(t *testing.T) {
+	for in, want := range map[string]string{
+		"hello":        "hello,",
+		"hello  ":      "hello,",
+		"2024":         "2024,",
+		"für Ärger":    "für Ärger,",
+		"hello.":       "hello.",
+		"hello!":       "hello!",
+		"really?":      "really?",
+		"wait,":        "wait,",
+		"(done)":       "(done)",
+		`say "hi"`:     `say "hi"`,
+		"fine 😀":       "fine 😀",
+		"":             "",
+		"   ":          "   ",
+		"こんにちは":        "こんにちは,",
+		"hello world…": "hello world…",
+	} {
+		if got := withEnding(in); got != want {
+			t.Errorf("withEnding(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// The fake worker makes a tone whose length follows the text, so one more character is audible as 0.05 s.
+func TestEndingMarkOnlyOnTheGraphicsCardEngine(t *testing.T) {
+	secs := func(e *env, voice, text string) float64 {
+		t.Helper()
+		resp, b := e.speak(t, `{"input":"`+text+`","voice":"`+voice+`"}`, nil)
+		if resp.StatusCode != 200 {
+			t.Fatalf("%d %s", resp.StatusCode, b)
+		}
+		s, err := wavSeconds(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	gpu := newEnv(t)
+	gpu.addVoice(t, "Anna")
+	gpu.waitReady(t)
+	if a, b := secs(gpu, "anna", "botting is the best way to stream ever"), secs(gpu, "anna", "botting is the best way to stream ever,"); a != b {
+		t.Fatalf("graphics card engine: a text without ending gets a comma (same length as with one): %.2f vs %.2f", a, b)
+	}
+	cpu := newEnvMode(t, "cpu")
+	cpu.waitReady(t)
+	if a, b := secs(cpu, "heart", "botting is the best way to stream ever"), secs(cpu, "heart", "botting is the best way to stream ever,"); !(a < b) {
+		t.Fatalf("processor engine: the text is spoken as it is: %.2f vs %.2f", a, b)
+	}
+}
+
+func TestVoiceListTellsTheSlowestSpeed(t *testing.T) {
+	read := func(e *env) map[string]float64 {
+		t.Helper()
+		resp, err := http.Get(e.srv.URL + "/v1/audio/voices")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var m struct {
+			Voices []struct {
+				ID       string
+				MinSpeed *float64 `json:"min_speed"`
+			}
+		}
+		json.NewDecoder(resp.Body).Decode(&m)
+		out := map[string]float64{}
+		for _, v := range m.Voices {
+			if v.MinSpeed == nil {
+				t.Fatalf("voice %s has no min_speed", v.ID)
+			}
+			out[v.ID] = *v.MinSpeed
+		}
+		return out
+	}
+	gpu := newEnv(t)
+	gpu.addVoice(t, "Anna")  // imported
+	gpu.addVoice(t, "Heart") // a sample voice
+	gpu.waitReady(t)
+	got := read(gpu)
+	if got["Anna"] != 0.8 || got["Heart"] != 0.5 || len(got) != 2 {
+		t.Fatalf("graphics card engine: %v", got)
+	}
+	cpu := newEnvMode(t, "cpu")
+	cpu.waitReady(t)
+	for id, v := range read(cpu) {
+		if v != 0.5 {
+			t.Fatalf("built-in voice %s: %v", id, v)
+		}
+	}
+	// what the list says is what speech() does
+	resp, b := gpu.speak(t, `{"input":"This is a sentence of some length.","voice":"anna","speed":0.5}`, nil)
+	resp2, b2 := gpu.speak(t, `{"input":"This is a sentence of some length.","voice":"anna","speed":0.8}`, nil)
+	if resp.StatusCode != 200 || resp2.StatusCode != 200 || len(b) != len(b2) {
+		t.Fatalf("an imported voice asked for 0.5 is made at 0.8: %d vs %d bytes", len(b), len(b2))
+	}
+}

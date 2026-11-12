@@ -6,7 +6,7 @@ Together with the source, this file is enough to continue the project. Details o
 ## 1. What the product is
 **SimpleVoice OBS** lets a streamer type text and have it spoken in a chosen voice into OBS. A Windows installer (Setup) installs a
 background program (the Relay) and an engine (Python, PyTorch, OmniVoice for the graphics card, Kokoro for the processor, Whisper for transcribing).
-Owner: eikira. Licence: GPL-3.0. Version 1.0.0 is the first production release.
+Owner: eikira. Licence: GPL-3.0. Version 1.0.0 is the first production release; 1.0.1 is the current one.
 
 ## 2. Names (use exactly these)
 | Thing | Name |
@@ -33,7 +33,7 @@ Owner: eikira. Licence: GPL-3.0. Version 1.0.0 is the first production release.
 
 ## 4. Version scheme
 First production release is 1.0.0. Updates go in 0.0.1 steps: 1.0.1 … 1.0.9, then 1.1.0. Update `const version` in `relay/main.go`
-and `setupBuild` in `setup/main.go`, add a `CHANGELOG.md` entry, run `./test.sh`, then `./build.sh`.
+and `setupBuild` in `setup/app.go`, add a `CHANGELOG.md` entry, run `./test.sh`, then `./build.sh`.
 Test builds before 1.0.0 are not supported: there is no migration code, testers uninstall them first.
 
 ## 5. Decisions and the reasons for them
@@ -43,6 +43,7 @@ Test builds before 1.0.0 are not supported: there is no migration code, testers 
 - **Own number-to-words** (`spoken_numbers`): English only, GPU engine only, off by default.
 - **Inventory**: Setup only removes what it recorded itself. See `docs/ARCHITECTURE.md`.
 - **Sample voice list** exists in three places that must match: `STARTERS` in `relay/worker.py`, `sampleVoiceNames` in the relay, `sampleVoices` in Setup. Drift tests guard it.
+- **Setup lifetime**: the page asks `/state` every second (heartbeat) and sends `POST /bye` (sendBeacon, host check only) on `pagehide`. `presence` (setup/presence.go): bye + 4 s without a page request = window closed = cancel (a running install is reversed, as before); 150 s of silence = lost = leave when idle, finish a running install first. At start, only when the exe is called `SimpleVoice-OBS-Setup.exe`, `endOtherSetups()` (PowerShell, Windows) ends other copies, their browser processes and old `simplevoice-obs-setup-*` temp folders. On exit `closeBrowser(profile)` ends the app window processes that use the temp profile.
 - **Browser window for Setup**: works, but the browser's translate popup can appear. A native Win32 wizard would fix that; parked.
 
 ## 6. How to build and check
@@ -68,12 +69,12 @@ Verified by the owner on test builds: the graphics card engine loads and speaks,
 Python 3.11.9 embeddable, torch and torchaudio 2.8.0+cu128, `omnivoice==0.2.1`, `kokoro-onnx==0.6.1`, Whisper large-v3-turbo, imageio-ffmpeg. Size figures in Setup (`components.go`) are estimates; update them when versions change.
 
 ## 10. Parked work
-1. Rename the Chrome extension to VoiceStudio+SimpleVoice OBS Connector and add a switch between VoiceStudio and SimpleVoice (the address setting; relay default `http://127.0.0.1:8787`). Needs the extension source; protocolVersion is 2 and `relay/tests` document the protocol.
-2. Tiny rebuild of the standalone VoiceStudio OBS Connector Relay for the connector name in its texts.
+1. (Done, extension 0.2.0: renamed, engine choice and Detect. The extension will read `min_speed` and limit its speed choices in a later update, 0.2.1.) Old note: rename the Chrome extension and add a switch between VoiceStudio and SimpleVoice. Needs the extension source; protocolVersion is 2 and `relay/tests` document the protocol.
+2. (Done, relay 0.0.8.) Tiny rebuild of the standalone VoiceStudio OBS Connector Relay for the connector name in its texts.
 3. Native Win32 setup wizard.
 4. cu126 build for GTX 10 cards. AMD support (needs a tester).
 
 ## 11. Release procedure
 1. Change code, run `./test.sh`.
 2. Bump versions (section 4), update `CHANGELOG.md` and, if behaviour changed, `docs/ARCHITECTURE.md`, `README.md` and this file.
-3. `./build.sh`, zip the exe, zip the source, give both to the owner. The owner tests, then publishes to GitHub as a release (tag `v1.0.0`, attach the Setup zip).
+3. `./build.sh`, zip the exe, zip the source, give both to the owner. The owner tests, then publishes to GitHub as a release (tag `v<version>`, attach the Setup zip).

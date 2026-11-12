@@ -20,6 +20,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 )
@@ -45,6 +46,7 @@ type server struct {
 	voices    func() []voiceInfo
 	wg        sync.WaitGroup
 	quit      chan struct{}
+	pres      *presence // is the page still open
 
 	mu    sync.Mutex
 	mode  string // install or uninstall
@@ -66,6 +68,9 @@ func (s *server) guard(h http.HandlerFunc) http.HandlerFunc {
 		if r.Host != s.host || (r.Method == http.MethodPost && r.Header.Get("X-Setup") != "1") {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
+		}
+		if s.pres != nil {
+			s.pres.seen() // every request of the page counts as a sign of life
 		}
 		h(w, r)
 	}
@@ -92,6 +97,19 @@ func (s *server) handler() http.Handler {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}))
+	// The page says goodbye when its window closes. A beacon cannot add the X-Setup header, so this one only
+	// checks the host. It does nothing by itself: if the page asks again within a few seconds (a reload),
+	// the goodbye is forgotten.
+	mux.HandleFunc("POST /bye", func(w http.ResponseWriter, r *http.Request) {
+		if r.Host != s.host {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if s.pres != nil {
+			s.pres.goodbye()
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("POST /quit", s.guard(func(w http.ResponseWriter, r *http.Request) {
 		select {
 		case s.quit <- struct{}{}:
@@ -260,6 +278,23 @@ func appWindow(url, profile string) <-chan struct{} {
 	return nil
 }
 
+const (
+	profileName    = "simplevoice-obs-setup-" // start of the temporary browser profile folder of one run
+	productionName = "SimpleVoice-OBS-Setup.exe"
+)
+
+func profilePrefix() string { return filepath.Join(os.TempDir(), profileName) }
+
+func isProductionExe(path string) bool { return strings.EqualFold(filepath.Base(path), productionName) }
+
+// removeOldProfiles deletes the temporary browser profile folders that earlier runs could not remove.
+func removeOldProfiles() {
+	old, _ := filepath.Glob(profilePrefix() + "*")
+	for _, d := range old {
+		os.RemoveAll(d)
+	}
+}
+
 func main() {
 	dir := flag.String("dir", defaultDir(), "install folder")
 	uninstall := flag.Bool("uninstall", false, "open in uninstall mode")
@@ -298,16 +333,51 @@ func main() {
 	s.launch = inst.launch
 	go http.Serve(ln, s.handler())
 
-	profile, _ := os.MkdirTemp("", "simplevoice-obs-setup-")
-	defer os.RemoveAll(profile)
-	window := appWindow("http://"+s.host+"/", profile)
-	select {
-	case <-ctx.Done():
-	case <-s.quit:
-	case <-window: // the window was closed; a running install is reversed
-		cancel()
+	// An earlier setup run that is still around (closed window, no exit) is ended first. Only for the real
+	// program name, so a test build or a copy under another name never ends anything.
+	if exe, err := os.Executable(); err == nil && isProductionExe(exe) {
+		endOtherSetups()
+		removeOldProfiles()
 	}
-	s.wg.Wait() // after closing, let a running install finish reversing itself
+	profile, _ := os.MkdirTemp("", profileName)
+	s.pres = newPresence(nil)
+	window := appWindow("http://"+s.host+"/", profile)
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+	var waiting bool
+wait:
+	for {
+		select {
+		case <-ctx.Done():
+			break wait
+		case <-s.quit:
+			break wait
+		case <-window: // the window process ended: the user closed it; a running install is reversed
+			cancel()
+			break wait
+		case <-tick.C:
+			closed, lost := s.pres.status()
+			if closed { // the page said goodbye and did not come back: same as the window closing
+				cancel()
+				break wait
+			}
+			if lost {
+				s.mu.Lock()
+				running := s.state == "running"
+				s.mu.Unlock()
+				if !running {
+					break wait
+				}
+				if !waiting { // no sign of the page, but nobody asked to stop: finish, then leave
+					waiting = true
+					s.logf("The setup window is not answering. The installation continues and setup closes when it is done.")
+				}
+			}
+		}
+	}
+	s.wg.Wait()           // after closing, let a running install finish reversing itself
+	closeBrowser(profile) // the app window and its helper processes must not keep the profile folder
+	os.RemoveAll(profile)
 	s.mu.Lock()
 	removed := s.mode == "uninstall" && s.state == "done"
 	s.mu.Unlock()

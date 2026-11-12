@@ -76,7 +76,7 @@ pre{height:240px;overflow:auto;white-space:pre-wrap;font-size:12px;background:#0
     <p>Next steps:</p>
     <ol>
       <li>In the control panel that opens, add your own voice: a clean recording of one speaker. 3 to 10 seconds works best; up to 20 seconds is accepted. The sample voices you ticked are already there.</li>
-      <li>In the VoiceStudio+SimpleVoice OBS Connector extension settings set <i>VoiceStudio address</i> to <code>http://127.0.0.1:8787</code>.</li>
+      <li>In the VoiceStudio+SimpleVoice OBS Connector extension (0.2.0 or newer) open Settings, section 2, choose <i>SimpleVoice OBS</i> (or click <i>Detect</i>) and click <i>Load voices</i> in section 3.</li>
       <li>Keep your OBS Browser Source URL as it is.</li>
     </ol>
     <p><button class="main" id="open2">Open SimpleVoice OBS</button> <button id="close">Close</button></p>
@@ -255,6 +255,8 @@ async function poll() {
   setTimeout(poll, 1000);
 }
 poll();
+// Tell setup when this window closes (a reload asks again at once, so setup then keeps going).
+addEventListener("pagehide", () => navigator.sendBeacon("/bye"));
 </script>
 </body>
 </html>

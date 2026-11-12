@@ -22,7 +22,7 @@ var payload embed.FS
 const (
 	appName = "SimpleVoice OBS"
 	// setupBuild numbers the test builds of the installer. It shows in the window, the log, the Apps list and the file name.
-	setupBuild = "1.0.0"
+	setupBuild = "1.0.1"
 	appExeName = "SimpleVoiceOBSRelay.exe"
 	regUninst  = `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\SimpleVoiceOBS`
 	runValue   = "SimpleVoiceOBS"

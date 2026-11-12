@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 //go:embed panel.html
@@ -112,6 +113,35 @@ func isSampleVoice(wavPath string) bool {
 	return false
 }
 
+// minBuiltinSpeed is the slowest speed of the built-in and sample voices (the range of the extension and the panel).
+const minBuiltinSpeed = 0.5
+
+// minSpeedOf is the slowest speed a voice can take, reported to the extension in the voice list. It is
+// the same rule speech() applies: imported voices (not sample voices, only on the graphics card engine)
+// cannot go below minCloneSpeed; built-in voices and sample voices go down to minBuiltinSpeed.
+func (r *relay) minSpeedOf(name string) float64 {
+	if r.eng.kindNow() == "cpu" || isSampleVoice(name) {
+		return minBuiltinSpeed
+	}
+	return minCloneSpeed
+}
+
+// endingMark is added to the end of a text that ends in a letter or a digit, on the graphics card engine only.
+// Without any ending the model tends to swallow the last word ("ever" came out as "e..."). A comma was chosen
+// over a full stop because it does not end the sentence. One place to change it.
+const endingMark = ","
+
+func withEnding(text string) string {
+	rs := []rune(strings.TrimRight(text, " \t\r\n"))
+	if len(rs) == 0 {
+		return text
+	}
+	if last := rs[len(rs)-1]; unicode.IsLetter(last) || unicode.IsDigit(last) {
+		return string(rs) + endingMark
+	}
+	return text
+}
+
 func clampSpeed(s float64) float64 {
 	if math.IsNaN(s) || s == 0 {
 		return 1
@@ -127,9 +157,9 @@ func (r *relay) v1(w http.ResponseWriter, req *http.Request) {
 	case req.Method == http.MethodGet && req.URL.Path == "/v1/models":
 		writeJSONNoCORS(w, 200, map[string]interface{}{"object": "list", "data": []map[string]string{{"id": "omnivoice", "object": "model"}}})
 	case req.Method == http.MethodGet && req.URL.Path == "/v1/audio/voices":
-		vs := []map[string]string{}
+		vs := []map[string]interface{}{}
 		for _, n := range r.speakable() {
-			vs = append(vs, map[string]string{"id": n, "name": n})
+			vs = append(vs, map[string]interface{}{"id": n, "name": n, "min_speed": r.minSpeedOf(n)})
 		}
 		writeJSONNoCORS(w, 200, map[string]interface{}{"voices": vs})
 	case req.Method == http.MethodPost && req.URL.Path == "/v1/audio/speech":
@@ -224,6 +254,9 @@ func (r *relay) speech(w http.ResponseWriter, req *http.Request) {
 	}
 	if wav != "" && !isSampleVoice(wav) && speed < minCloneSpeed { // imported recordings: slower than this lets the sample leak into the speech
 		speed = minCloneSpeed
+	}
+	if wav != "" { // graphics card engine
+		text = withEnding(text)
 	}
 	ctx, cancel := context.WithTimeout(req.Context(), 2*time.Minute)
 	defer cancel()

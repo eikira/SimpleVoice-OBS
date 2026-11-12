@@ -39,8 +39,8 @@ Setup detects this and installs only the processor engine, without downloading a
 1. Download `SimpleVoice-OBS-Setup-<version>-Windows.zip` from the releases page and unzip it.
 2. Double-click `SimpleVoice-OBS-Setup.exe`, tick what you want, accept the licence note, click **Install**.
 3. When it finishes, the control panel opens. Add a voice and press **Generate** in the Test section.
-4. In the **VoiceStudio+SimpleVoice OBS Connector** extension settings set *VoiceStudio address* to `http://127.0.0.1:8787`.
-   Keep your OBS Browser Source URL as it is.
+4. In the **VoiceStudio+SimpleVoice OBS Connector** extension (0.2.0 or newer) open Settings, section 2, choose **SimpleVoice OBS** (or click **Detect**), then click **Load voices** in section 3.
+   Keep your OBS Browser Source URL as it is. (Extension 0.1.1 has no choice yet: there, set *VoiceStudio address* to `http://127.0.0.1:8787`. Updating to 0.2.0 is recommended.)
 
 Setup needs no administrator rights. It installs to `%LOCALAPPDATA%\SimpleVoice-OBS`. If Windows or your firewall asks,
 click Allow for the program and for `python.exe`.
@@ -68,7 +68,7 @@ To remove everything, open the Setup again and use **Uninstall**, or use Windows
 |---|---|
 | **SimpleVoice OBS** | this whole product |
 | **SimpleVoice OBS Relay** | the background program (`SimpleVoiceOBSRelay.exe`) |
-| **VoiceStudio+SimpleVoice OBS Connector** | the Chrome extension (until it is re-released the installed version, 0.1.1, still says "VoiceStudio OBS Connector") |
+| **VoiceStudio+SimpleVoice OBS Connector** | the Chrome extension, version 0.2.0 or newer (before 0.2.0 it was called "VoiceStudio OBS Connector" and worked with VoiceStudio only) |
 | **VoiceStudio OBS Connector Relay** | the separate standalone relay for VoiceStudio. SimpleVoice OBS is a replacement for it that also brings its own voices. |
 | **OmniVoice**, **Kokoro** | the voice models used by the graphics card and processor engine |
 
