@@ -28,7 +28,7 @@ import (
 //go:embed worker.py
 var workerPy []byte
 
-const version = "1.0.1"
+const version = "1.0.3"
 
 var logOut io.Writer = os.Stdout
 
@@ -42,6 +42,9 @@ type config struct {
 	python, ffmpeg            string
 	steps                     int
 }
+
+// activeCfg is what the running relay uses (set once at start; the network page shows it).
+var activeCfg config
 
 // appDir is the folder the program runs from (where settings.txt normally lives too).
 func appDir() string {
@@ -154,9 +157,31 @@ func loadConfig(flagHost, flagPort string) config {
 		engineDir: eng, python: py, ffmpeg: pick("", "FFMPEG", "FFMPEG", ""), steps: steps, voices: pick("", "VOICES", "VOICES", defaultVoicesDir()), engine: strings.ToLower(pick("", "ENGINE", "ENGINE", "auto"))}
 }
 
+func printAddresses(cfg config) {
+	fmt.Println("Addresses of this computer (adapters that are up):")
+	list := listAdapters()
+	if len(list) == 0 {
+		fmt.Println("  none found")
+	}
+	for _, a := range list {
+		tag := "private network"
+		switch {
+		case a.Kind == "shared":
+			tag = "PROBABLY A VPN"
+		case a.Kind == "public":
+			tag = "NOT PRIVATE"
+		case a.Virtual:
+			tag = "LOOKS LIKE A VPN OR VIRTUAL ADAPTER"
+		}
+		fmt.Printf("  %-16s %-28s %s\n", a.Address, a.Adapter, tag)
+	}
+	fmt.Println("Choose your real home or office network, not a VPN. Save one with:  --set-host ADDRESS")
+	fmt.Println("The extension's Detect looks only on one port (now " + cfg.port + "): keep the same port in the extension.")
+}
+
 // doStop asks a running relay (on this computer) to close. Returns the exit code.
 func doStop(cfg config) int {
-	req, _ := http.NewRequest(http.MethodPost, "http://127.0.0.1:"+cfg.port+"/shutdown", nil)
+	req, _ := http.NewRequest(http.MethodPost, "http://"+dialHost(cfg)+":"+cfg.port+"/shutdown", nil)
 	req.Header.Set("X-Relay-Stop", "1")
 	c := &http.Client{Timeout: 4 * time.Second, Transport: &http.Transport{Proxy: nil}}
 	resp, err := c.Do(req)
@@ -172,7 +197,7 @@ func doStop(cfg config) int {
 	// wait until it is really gone
 	for i := 0; i < 30; i++ {
 		time.Sleep(100 * time.Millisecond)
-		if conn, err := net.DialTimeout("tcp", "127.0.0.1:"+cfg.port, 300*time.Millisecond); err != nil {
+		if conn, err := net.DialTimeout("tcp", net.JoinHostPort(dialHost(cfg), cfg.port), 300*time.Millisecond); err != nil {
 			break
 		} else {
 			conn.Close()
@@ -188,6 +213,10 @@ func main() {
 	setPort := flag.String("set-port", "", "save a new port (1024-65535) to settings.txt")
 	restarted := flag.Bool("restarted", false, "internal: started by the port-change restart")
 	openFolder := flag.Bool("open-folder", false, "open the folder this program runs from")
+	setHost := flag.String("set-host", "", "save the address to listen on (an address from --list-addresses, or 127.0.0.1)")
+	yesPublic := flag.Bool("yes-not-private", false, "with --set-host: confirm an address that is not in a private range")
+	listAddr := flag.Bool("list-addresses", false, "list the addresses of this computer with their adapters")
+	openNet := flag.Bool("open-network", false, "open the page where the listening address is chosen")
 	host := flag.String("host", "", "address to listen on (default 127.0.0.1)")
 	openPanel := flag.Bool("open-panel", false, "open the control panel in the browser once running")
 	port := flag.String("port", "", "port to listen on (default 8787)")
@@ -211,6 +240,33 @@ func main() {
 		fmt.Println("Port saved: " + *setPort + ". Restart the relay. Then set the same address in the extension settings (Relay address) and use the new OBS URL.")
 		return
 	}
+	if *listAddr {
+		printAddresses(cfg)
+		return
+	}
+	if *setHost != "" {
+		h := strings.TrimSpace(*setHost)
+		if msg := checkHost(h, *yesPublic); msg != "" {
+			fmt.Println(msg)
+			os.Exit(2)
+		}
+		if err := writeSetting("HOST", h); err != nil {
+			fmt.Println("Could not save the setting:", err)
+			os.Exit(1)
+		}
+		fmt.Println("Listening address saved: " + h + ". Restart the relay.")
+		if h != "127.0.0.1" {
+			fmt.Println("Then set the Relay address in the extension (on the other PC) to http://" + h + ":" + cfg.port)
+		}
+		return
+	}
+	if *openNet {
+		if err := openPath("http://" + dialHost(cfg) + ":" + cfg.port + "/network"); err != nil {
+			fmt.Println("Could not open the browser. Open this address yourself: http://" + dialHost(cfg) + ":" + cfg.port + "/network")
+			os.Exit(1)
+		}
+		return
+	}
 	if *stop {
 		os.Exit(doStop(cfg))
 	}
@@ -224,6 +280,11 @@ func main() {
 		return
 	}
 	initLog()
+	hostFallbackNote = resolveHost(&cfg)
+	activeCfg = cfg
+	if hostFallbackNote != "" {
+		logf("%s", hostFallbackNote)
+	}
 	os.MkdirAll(cfg.voices, 0o755)
 	script := filepath.Join(dataDir(), "worker.py")
 	os.WriteFile(script, workerPy, 0o644)
@@ -245,7 +306,7 @@ func main() {
 	}
 	if err != nil {
 		if runningHere(cfg) { // started a second time (Start menu, shortcut): just show the panel
-			openPath("http://127.0.0.1:" + cfg.port + "/")
+			openPath("http://" + dialHost(cfg) + ":" + cfg.port + "/")
 			return
 		}
 		fatal("Port " + cfg.port + " is already in use by another program. Change the port in settings.txt.")
@@ -253,6 +314,7 @@ func main() {
 	}
 	srv := &http.Server{Handler: r}
 	go srv.Serve(ln)
+	go firewallProbe(cfg.host) // lets a firewall ask about this program when it listens on a network address
 	go func() {
 		for {
 			select {
@@ -264,11 +326,11 @@ func main() {
 		}
 	}()
 	if *openPanel {
-		openPath("http://127.0.0.1:" + cfg.port + "/")
+		openPath("http://" + dialHost(cfg) + ":" + cfg.port + "/")
 	}
 	logf("SimpleVoice OBS Relay %s running on http://%s:%s", version, cfg.host, cfg.port)
-	if cfg.host != "127.0.0.1" && cfg.host != "localhost" {
-		logf("WARNING: listening beyond this PC. Anyone on your network who knows your ID can send speech.")
+	if !isLocalOnly(cfg.host) {
+		logf("WARNING: listening beyond this PC (%s). Anyone on that network who knows your ID can send speech. Use only a network you trust.", cfg.host)
 	}
 
 	runUI(r, cfg) // blocks until the relay should close
@@ -283,7 +345,7 @@ func defaultVoicesDir() string { return filepath.Join(appDir(), "voices") }
 // runningHere tells if this relay is already answering on the port.
 func runningHere(cfg config) bool {
 	c := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{Proxy: nil}}
-	resp, err := c.Get("http://127.0.0.1:" + cfg.port + "/info")
+	resp, err := c.Get("http://" + dialHost(cfg) + ":" + cfg.port + "/info")
 	if err != nil {
 		return false
 	}

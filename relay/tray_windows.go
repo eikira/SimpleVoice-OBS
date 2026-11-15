@@ -93,6 +93,7 @@ const (
 	idDir    = 6
 	idOK     = 1
 	idCancel = 2
+	idNet    = 10
 )
 
 type point struct{ X, Y int32 }
@@ -352,6 +353,7 @@ func runUI(r *relay, cfg config) {
 		add(mfString, idDir, "Open voices folder")
 		add(mfString, idLog, "Show log")
 		add(mfString, idPort, "Change port...")
+		add(mfString, idNet, "Listening address (network)...")
 		autoFlags := uintptr(mfString)
 		if autostartOn() {
 			autoFlags |= mfChecked
@@ -367,11 +369,13 @@ func runUI(r *relay, cfg config) {
 		pPostMessage.Call(hwnd, wmNull, 0, 0)
 		switch cmd {
 		case idOpen:
-			shellOpen("http://127.0.0.1:"+cfg.port+"/", "")
+			shellOpen("http://"+dialHost(cfg)+":"+cfg.port+"/", "")
 		case idLog:
 			shellOpen("notepad.exe", `"`+logPath()+`"`)
 		case idPort:
 			openPortDialog()
+		case idNet:
+			shellOpen("http://"+dialHost(cfg)+":"+cfg.port+"/network", "")
 		case idDir:
 			openPath(r.voices.dir)
 		case idAuto:
@@ -388,7 +392,7 @@ func runUI(r *relay, cfg config) {
 			case wmRButtonUp:
 				showMenu()
 			case wmLButtonDbl:
-				shellOpen("http://127.0.0.1:"+cfg.port+"/", "")
+				shellOpen("http://"+dialHost(cfg)+":"+cfg.port+"/", "")
 			}
 			return 0
 		case wmClose:
@@ -423,7 +427,7 @@ func runUI(r *relay, cfg config) {
 			messageBox("Could not save the new port: "+err.Error(), 0x10)
 			return false
 		}
-		messageBox("Port changed to "+v+". The relay restarts now.\n\nThen:\n1. In the extension settings, set \"Relay address\" to http://127.0.0.1:"+v+" and Save.\n2. In OBS, replace the Browser Source URL with the new one (Copy in the extension settings).", 0x40)
+		messageBox("Port changed to "+v+". The relay restarts now.\n\nThen:\n1. In the extension settings, set \"Relay address\" to http://"+dialHost(cfg)+":"+v+" and Save.\n2. In OBS, replace the Browser Source URL with the new one (Copy in the extension settings).", 0x40)
 		if exe, err := os.Executable(); err == nil {
 			exec.Command(exe, "--restarted").Start()
 		}

@@ -44,7 +44,7 @@ func hostOK(h string) bool {
 // same address (the control panel) and from browser extensions. Other web pages are refused.
 func originOK(req *http.Request) bool {
 	o := req.Header.Get("Origin")
-	if o == "" || strings.HasPrefix(o, "chrome-extension://") {
+	if o == "" || strings.HasPrefix(o, "chrome-extension://") || strings.HasPrefix(o, "moz-extension://") {
 		return true
 	}
 	u, err := url.Parse(o)
@@ -281,7 +281,8 @@ func (r *relay) speech(w http.ResponseWriter, req *http.Request) {
 // ---- control panel ------------------------------------------------------------------
 
 func (r *relay) panel(w http.ResponseWriter, req *http.Request) {
-	if !hostOK(req.Host) {
+	// The control panel is for this computer only, also when the relay listens on a network address.
+	if !hostOK(req.Host) || !isLocalClient(req.RemoteAddr) {
 		fail(w, 403, "forbidden")
 		return
 	}

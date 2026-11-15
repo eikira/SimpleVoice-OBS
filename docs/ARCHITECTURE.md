@@ -46,9 +46,12 @@ site cannot send that header cross-origin. Responses use `writeJSONNoCORS` and `
 | `POST /api/engine/mode`, `/quality`, `/options`, `/restart` | Engine settings (saved in `settings.txt`) |
 | `POST /api/convert?format=mp3\|flac\|aac` | Convert a generated WAV for saving |
 | `POST /api/open-voices` | Open the voices folder |
+| `GET /network`, `GET /api/network`, `POST /api/network/host` | Listening address: page, adapter list, save (this computer only; the POST needs the header `X-Relay-Open: 1`). Code in `relay/network.go` |
+
+The control panel and all `/api/` calls above answer this computer only (`isLocalClient`: loopback or one of the PC's own addresses), also when the relay listens on a LAN address. `/v1/` (the extension) and the OBS source answer the network.
 
 ### Settings (`settings.txt`, next to the exe)
-`PORT` (8787), `HOST` (127.0.0.1), `VOICES`, `ENGINEDIR`, `FFMPEG`, `ENGINE` (auto/gpu/cpu), `STEPS` (16/32/48, default 32),
+`PORT` (8787), `HOST` (127.0.0.1; a LAN address chosen on the `/network` page, `--set-host` or the tray menu; falls back to 127.0.0.1 if the PC no longer has it), `VOICES`, `ENGINEDIR`, `FFMPEG`, `ENGINE` (auto/gpu/cpu), `STEPS` (16/32/48, default 32),
 `LANGUAGE` (`auto` or a code), `NUMBERS` (`on`/`off`). Writes are serialized (`writeSetting`, one mutex).
 
 ## The worker (`relay/worker.py`)

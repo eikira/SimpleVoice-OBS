@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Listening address</title>
+<style>
+body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:#14161a;color:#e8e8e8;margin:0;padding:24px;max-width:760px}
+h1{font-size:22px;margin:0 0 6px}h2{font-size:16px;margin:22px 0 8px}
+.card{background:#1d2026;border:1px solid #2c3039;border-radius:8px;padding:12px 14px;margin:8px 0}
+.warn{background:#3a1d1d;border:2px solid #d9534f;color:#ffd9d6;border-radius:8px;padding:10px 14px;margin:10px 0;font-weight:600}
+.opt{display:block;border:1px solid #2c3039;border-radius:8px;padding:10px 12px;margin:8px 0;cursor:pointer}
+.opt.sel{border-color:#2f7a4a}.opt input{margin-right:10px}
+.name{color:#b8bcc4}.tag{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:10px;font-size:12px}
+.tag.vpn{background:#5a2323;color:#ffd9d6}.tag.ok{background:#1f3a2a;color:#bfe6cc}.tag.pub{background:#5a2323;color:#ffd9d6}
+button{background:#2f7a4a;color:#fff;border:0;border-radius:6px;padding:8px 14px;font-size:14px;cursor:pointer}
+button.small{padding:3px 10px;font-size:12px;background:#3a4050;margin-left:8px}
+button:disabled{opacity:.5;cursor:default}
+.msg{margin:10px 0;color:#bfe6cc}.err{color:#ff9d96}.note{color:#b8bcc4;font-size:13px}
+code{background:#0f1114;padding:1px 6px;border-radius:4px}
+</style></head><body>
+<h1>Listening address</h1>
+<div class="note">Which network address this relay answers on. This page opens only on this computer.</div>
+
+<div class="warn" id="warn1">Choose your real home or office network. Do not choose a VPN or virtual adapter.</div>
+<div class="warn" id="warn2"></div>
+
+<div class="card" id="now"></div>
+<div class="card err" id="fallback" hidden></div>
+
+<h2>Choose the address</h2>
+<form id="form"></form>
+<details id="otherBox" hidden><summary>Other addresses (not private)</summary>
+  <div class="warn">These addresses may be reachable from the internet. Choose one only if you know it is your own network.</div>
+  <div id="other"></div>
+  <label><input type="checkbox" id="confirmPublic"> I know this address is my own network.</label>
+</details>
+<p><button id="save">Save and restart the relay</button></p>
+<div class="msg" id="msg"></div>
+
+<h2>Address for the extension</h2>
+<div class="note">If the extension runs on another PC, enter one of these as its Relay address (the adapter name is shown so you pick the right one):</div>
+<div id="forExt"></div>
+<div class="note" id="fw"><b>Firewall:</b> when the relay starts on a network address it makes one short connection attempt from that address to the gateway of that network, so your firewall (Windows Firewall, simplewall and others) can ask about this program. <b>Allow it for your private network.</b> If no question appears, check your firewall's list of allowed programs. To test: use <b>Detect relay</b> in the extension from the other PC.</div>
+<p class="note">There is no password. Anyone on the same network can send commands to this relay if they know your OBS ID. Use it only on a network you trust.</p>
+
+<script>
+(function(){
+  var state=null, chosen='127.0.0.1';
+  function $(id){return document.getElementById(id)}
+  function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!==undefined)e.textContent=x;return e}
+  function tagFor(a){
+    if(a.kind==='shared')return ['PROBABLY A VPN','vpn'];
+    if(a.kind==='public')return ['NOT PRIVATE','pub'];
+    if(a.virtual)return ['LOOKS LIKE A VPN OR VIRTUAL ADAPTER','vpn'];
+    return ['private network','ok'];
+  }
+  function option(addr,title,name,tag){
+    var l=el('label','opt'+(chosen===addr?' sel':''));
+    var r=document.createElement('input');r.type='radio';r.name='addr';r.value=addr;r.checked=chosen===addr;
+    r.addEventListener('change',function(){chosen=addr;render()});
+    l.appendChild(r);l.appendChild(el('strong','',title));
+    if(name)l.appendChild(el('span','name','  '+name));
+    if(tag){var t=el('span','tag '+tag[1],tag[0]);l.appendChild(t)}
+    return l;
+  }
+  function render(){
+    if(!state)return;
+    $('warn2').textContent='The extension\'s Detect looks only on port '+state.port+'. If you change the port, set the same port in the extension (Relay address), or Detect will not find this relay.';
+    var nowText=state.listening==='127.0.0.1'?'Now listening on: this PC only (127.0.0.1), port '+state.port:'Now listening on: '+state.listening+', port '+state.port;
+    $('now').textContent=nowText;
+    $('fallback').hidden=!state.note;$('fallback').textContent=state.note||'';
+    var f=$('form');f.textContent='';
+    f.appendChild(option('127.0.0.1','This PC only','127.0.0.1 (the safest)',null));
+    var pub=[];
+    state.adapters.forEach(function(a){
+      if(a.kind==='public'){pub.push(a);return}
+      f.appendChild(option(a.address,a.address,a.adapter,tagFor(a)));
+    });
+    var o=$('other');o.textContent='';
+    pub.forEach(function(a){o.appendChild(option(a.address,a.address,a.adapter,tagFor(a)))});
+    $('otherBox').hidden=!pub.length;
+    if(pub.some(function(a){return a.address===chosen}))$('otherBox').open=true;
+    var x=$('forExt');x.textContent='';
+    var any=false;
+    state.adapters.forEach(function(a){
+      if(a.kind==='public')return;any=true;
+      var url='http://'+a.address+':'+state.port;
+      var c=el('div','card');c.appendChild(el('code','',url));
+      c.appendChild(el('span','name','  '+a.adapter));
+      var t=tagFor(a);c.appendChild(el('span','tag '+t[1],t[0]));
+      var b=el('button','small','Copy');b.type='button';
+      b.addEventListener('click',function(){
+        if(navigator.clipboard)navigator.clipboard.writeText(url).then(function(){b.textContent='Copied'});
+      });
+      c.appendChild(b);x.appendChild(c);
+    });
+    if(!any)x.appendChild(el('div','note','No private network address found on this computer.'));
+  }
+  function load(){
+    fetch('/api/network',{cache:'no-store'}).then(function(r){return r.json()}).then(function(d){
+      state=d;chosen=d.listening;render();
+    }).catch(function(){$('msg').textContent='Could not read the network list.';$('msg').className='msg err'});
+  }
+  $('save').addEventListener('click',function(){
+    var m=$('msg');m.className='msg';m.textContent='';
+    $('save').disabled=true;
+    fetch('/api/network/host',{method:'POST',headers:{'Content-Type':'application/json','X-Relay-Open':'1'},
+      body:JSON.stringify({host:chosen,confirmPublic:$('confirmPublic').checked})})
+    .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j}})})
+    .then(function(x){
+      if(!x.ok){m.className='msg err';m.textContent=x.j.error||x.j.message||'Could not save.';$('save').disabled=false;return}
+      m.textContent='Saved. The relay restarts now. Your firewall may ask about this program: allow it for your private network. This page opens again on the new address in a few seconds. Then set the same address as Relay address in the extension and copy the new OBS Browser Source URL.';
+      var target='http://'+(chosen==='127.0.0.1'?'127.0.0.1':chosen)+':'+x.j.port+'/network';
+      var tries=0;(function poll(){
+        tries++;
+        fetch(target,{mode:'no-cors',cache:'no-store'}).then(function(){location.href=target}).catch(function(){
+          if(tries<30)setTimeout(poll,1000);else{m.className='msg err';m.textContent='The relay did not come back. Start it again by hand.';$('save').disabled=false}
+        });
+      })();
+    }).catch(function(){m.className='msg err';m.textContent='Could not reach the relay.';$('save').disabled=false});
+  });
+  load();
+})();
+</script></body></html>

@@ -6,7 +6,7 @@ Together with the source, this file is enough to continue the project. Details o
 ## 1. What the product is
 **SimpleVoice OBS** lets a streamer type text and have it spoken in a chosen voice into OBS. A Windows installer (Setup) installs a
 background program (the Relay) and an engine (Python, PyTorch, OmniVoice for the graphics card, Kokoro for the processor, Whisper for transcribing).
-Owner: eikira. Licence: GPL-3.0. Version 1.0.0 is the first production release; 1.0.1 is the current one.
+Owner: eikira. Licence: GPL-3.0. Version 1.0.0 is the first production release; 1.0.3 is the current one.
 
 ## 2. Names (use exactly these)
 | Thing | Name |

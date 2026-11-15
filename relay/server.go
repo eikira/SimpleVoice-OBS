@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -280,14 +279,8 @@ func newRelay(eng *engine, vs voiceStore) *relay {
 
 func (r *relay) requestQuit() { r.once.Do(func() { close(r.quit) }) }
 
-func isLoopback(remote string) bool {
-	host, _, err := net.SplitHostPort(remote)
-	if err != nil {
-		return false
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
-}
+// isLoopback: the request comes from this computer (see isLocalClient in network.go).
+func isLoopback(remote string) bool { return isLocalClient(remote) }
 
 func (r *relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	id := req.URL.Query().Get("id")
@@ -302,6 +295,10 @@ func (r *relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if req.Method == http.MethodOptions {
 		cors(w)
 		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.handleNetwork(w, req, path) {
 		return
 	}
 
@@ -326,7 +323,7 @@ func (r *relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	case req.Method == http.MethodGet && path == "/info":
 		st := r.eng.status()
-		writeJSON(w, 200, map[string]interface{}{"ok": true, "version": version, "protocol": protocolVersion, "updateCheck": false,
+		writeJSON(w, 200, map[string]interface{}{"ok": true, "name": "SimpleVoice OBS Relay", "listening": listenHost(), "adapter": listenAdapter(), "version": version, "protocol": protocolVersion, "updateCheck": false,
 			"latest": "", "updateAvailable": false, "downloadUrl": "", "engine": st.State})
 
 	case req.Method == http.MethodPost && path == "/open-folder":

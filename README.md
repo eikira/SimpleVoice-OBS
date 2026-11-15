@@ -19,7 +19,7 @@ does, so nothing else has to change.
 - **Works with the extension you already use.** The relay answers the same requests as VoiceStudio:
   `/overlay.html`, `/events`, `/send`, `/status`, `/tts`, `/info`, `/open-folder`, `/shutdown` and
   `/v1/audio/speech`, `/v1/audio/voices`, `/v1/models`.
-- **Private.** Everything runs on your PC. The relay only listens on `127.0.0.1`. The internet is used while installing (see below).
+- **Private.** Everything runs on your PC. The relay listens on `127.0.0.1` (this PC only) unless you choose a network address for OBS or the extension on another computer (see below). The internet is used while installing (see below).
 
 ## Requirements
 
@@ -39,8 +39,8 @@ Setup detects this and installs only the processor engine, without downloading a
 1. Download `SimpleVoice-OBS-Setup-<version>-Windows.zip` from the releases page and unzip it.
 2. Double-click `SimpleVoice-OBS-Setup.exe`, tick what you want, accept the licence note, click **Install**.
 3. When it finishes, the control panel opens. Add a voice and press **Generate** in the Test section.
-4. In the **VoiceStudio+SimpleVoice OBS Connector** extension (0.2.0 or newer) open Settings, section 2, choose **SimpleVoice OBS** (or click **Detect**), then click **Load voices** in section 3.
-   Keep your OBS Browser Source URL as it is. (Extension 0.1.1 has no choice yet: there, set *VoiceStudio address* to `http://127.0.0.1:8787`. Updating to 0.2.0 is recommended.)
+4. In the **VoiceStudio+SimpleVoice OBS Connector** extension (0.3.0 or newer) open Settings, section 2, choose **SimpleVoice OBS** (or click **Detect**), then click **Load voices** in section 3.
+   Keep your OBS Browser Source URL as it is. (Extension 0.1.1 has no choice yet: there, set *VoiceStudio address* to `http://127.0.0.1:8787`. Updating to 0.3.0 is recommended.)
 
 Setup needs no administrator rights. It installs to `%LOCALAPPDATA%\SimpleVoice-OBS`. If Windows or your firewall asks,
 click Allow for the program and for `python.exe`.
@@ -48,9 +48,22 @@ click Allow for the program and for `python.exe`.
 During install, Setup downloads from python.org, pypi.org and files.pythonhosted.org, download.pytorch.org,
 huggingface.co and github.com. Nothing is sent anywhere. The relay is designed to work offline after install (not verified on every setup).
 
+## Another computer: listening address
+
+By default only this PC can reach the relay. To use OBS or the extension on another computer, open the **network page** (link in the control panel, or tray menu *Listening address (network)...*). The page, which opens only on this PC:
+
+- lists the addresses of this PC with the **adapter name** of each; private ranges are offered, VPN-looking adapters and 100.64.x.x are marked red,
+  other addresses need a confirmation;
+- says: **choose your real home or office network, not a VPN adapter**, and **the extension's Detect looks on one port only, so the port must match**;
+- shows the address to enter in the extension, with a Copy button.
+
+Saving restarts the relay. After the restart it makes one short connection attempt to the gateway of that network so that Windows Firewall or
+simplewall can ask about the program; allow it for your private network. Anyone on that network who knows your OBS ID can send speech: use it only on
+a network you trust. The control panel and the `/api/` calls stay reachable from this PC only.
+
 ## Using it
 
-- Tray icon: double-click opens the control panel. The menu has: control panel, voices folder, log, change port, exit.
+- Tray icon: double-click opens the control panel. The menu has: control panel, voices folder, log, change port, listening address (network), exit.
 - **Imported voices** go down to speed 0.8 only. Slower speeds make the model repeat parts of the recording.
   The sample voices and the processor engine's built-in voices go from 0.5 to 1.5.
 - **Voice quality** (graphics card engine): Fast 16 steps, Normal 32 steps (default), High 48 steps.

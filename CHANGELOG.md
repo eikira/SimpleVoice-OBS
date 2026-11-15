@@ -3,6 +3,21 @@
 Version numbers: the first production release is 1.0.0. Updates go up by 0.0.1 (1.0.1, 1.0.2, ... 1.0.9), then 1.1.0.
 Each entry says what changed and what is **not verified**.
 
+## 1.0.3
+
+- **Firewall question:** when the relay starts on a network address, it makes one short connection attempt from that address to the gateway of that network (port 80; the answer does not matter, and nothing goes to the internet). A firewall such as Windows Firewall or simplewall only asks about a program when it sees its traffic; listening alone shows nothing. The log says what happened ("Firewall check: ..."). Never done in "this PC only" mode. The page `/network` says that the firewall may ask and to allow it for the private network. Same change as in the standalone relay 0.1.0.
+- **Not verified:** that Windows Firewall and simplewall really show their question because of this attempt (tested here that the attempt leaves from the chosen address and that the gateway is found on Linux; the Windows gateway lookup compiles but was not run on Windows).
+
+## 1.0.2
+
+Works with extension 0.2.0 and newer.
+
+- **Listening address:** choose which network address the relay answers on, for OBS or the extension on another computer. The page `/network` (only this computer can open it) lists the addresses of this computer with the adapter name of each. Private ranges (192.168.x.x, 10.x.x.x, 172.16-31.x.x) are offered; adapters that look like a VPN or a virtual adapter, and the 100.64.x.x range, are marked in red; other (not private) addresses are hidden in a section with a red warning and a confirmation box. Two prominent notices: choose your real network, not a VPN; and the extension's Detect looks on one port only, so the port must match. Open it from the tray menu "Listening address (network)...", from the control panel, or with `--open-network`. Without a browser: `--list-addresses` and `--set-host ADDRESS` (`--yes-not-private` confirms a not-private address). Saving restarts the relay. If the saved address is gone (the network changed), the relay starts on this PC only and says why.
+- **The control panel stays on this computer.** The panel page, `/api/*` and the shutdown call answer only this computer (loopback or one of its own addresses), also when the relay listens on a network address. Only the extension calls (`/v1/...`) and the OBS source are open to the network.
+- **Firefox:** the relay now also accepts calls from the Firefox version of the extension (`moz-extension://` origin).
+- `GET /info` also reports `name`, `listening` (the address it listens on) and `adapter`, so the extension can recognise this relay when it searches the network and show where it listens.
+- **Not verified:** Windows tray entry and restart on Windows (built and `go vet` checked only); macOS and Linux builds (this relay is Windows-only in practice); real LAN and VPN adapters (tested with simulated lists and on a machine with one network card); Firefox.
+
 ## 1.0.1
 
 Fixes and small changes. Works with extension 0.2.0 (which has the SimpleVoice OBS choice and reads the new `min_speed`) and still with 0.1.1.
