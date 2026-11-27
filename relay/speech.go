@@ -162,6 +162,12 @@ func (r *relay) v1(w http.ResponseWriter, req *http.Request) {
 			vs = append(vs, map[string]interface{}{"id": n, "name": n, "min_speed": r.minSpeedOf(n)})
 		}
 		writeJSONNoCORS(w, 200, map[string]interface{}{"voices": vs})
+	case req.Method == http.MethodGet && req.URL.Path == "/v1/soundbites":
+		list := []sbEntry{}
+		if r.sounds != nil {
+			list = r.sounds.entries()
+		}
+		writeJSONNoCORS(w, 200, map[string]interface{}{"soundbites": list})
 	case req.Method == http.MethodPost && req.URL.Path == "/v1/audio/speech":
 		r.speech(w, req)
 	default:
@@ -239,29 +245,24 @@ func (r *relay) speech(w http.ResponseWriter, req *http.Request) {
 		speechError(w, 400, "input must be 1 to 4000 characters")
 		return
 	}
-	wav, ref, builtin, err := r.pickVoice(p.Voice)
-	if err != nil {
-		if errors.Is(err, errNoVoice) {
-			speechError(w, 404, "Voice \""+p.Voice+"\" does not exist. Add it in the control panel.")
-		} else {
-			speechError(w, 400, "Voice \""+p.Voice+"\": "+err.Error())
-		}
+	var parts []piece
+	clips := 0
+	if r.sounds != nil {
+		parts, clips = r.sounds.splitEmotes(text)
+	}
+	if clips > 0 {
+		r.speechWithClips(w, req, p.Voice, p.Speed, parts)
 		return
 	}
-	speed := 1.0
-	if p.Speed != nil {
-		speed = clampSpeed(*p.Speed)
-	}
-	if wav != "" && !isSampleVoice(wav) && speed < minCloneSpeed { // imported recordings: slower than this lets the sample leak into the speech
-		speed = minCloneSpeed
-	}
-	if wav != "" { // graphics card engine
-		text = withEnding(text)
+	v, status, err := r.voiceSetup(p.Voice, p.Speed)
+	if err != nil {
+		speechError(w, status, err.Error())
+		return
 	}
 	ctx, cancel := context.WithTimeout(req.Context(), 2*time.Minute)
 	defer cancel()
 	began := time.Now()
-	audio, err := r.eng.speak(ctx, text, builtin, wav, ref, speed)
+	audio, err := r.speakPiece(ctx, v, text)
 	if err != nil {
 		var ee errEngine
 		code := 500
@@ -276,6 +277,157 @@ func (r *relay) speech(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "audio/wav")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(audio)
+}
+
+// chosenVoice is a voice with its speed, ready for the engine.
+type chosenVoice struct {
+	wav, ref, builtin string
+	speed             float64
+}
+
+// voiceSetup finds the voice and settles the speed. status is the HTTP status for an error.
+func (r *relay) voiceSetup(name string, speedIn *float64) (chosenVoice, int, error) {
+	wav, ref, builtin, err := r.pickVoice(name)
+	if err != nil {
+		if errors.Is(err, errNoVoice) {
+			return chosenVoice{}, 404, errors.New("Voice \"" + name + "\" does not exist. Add it in the control panel.")
+		}
+		return chosenVoice{}, 400, errors.New("Voice \"" + name + "\": " + err.Error())
+	}
+	speed := 1.0
+	if speedIn != nil {
+		speed = clampSpeed(*speedIn)
+	}
+	if wav != "" && !isSampleVoice(wav) && speed < minCloneSpeed { // imported recordings: slower than this lets the sample leak into the speech
+		speed = minCloneSpeed
+	}
+	return chosenVoice{wav: wav, ref: ref, builtin: builtin, speed: speed}, 0, nil
+}
+
+// speakPiece makes the speech for one piece of text.
+func (r *relay) speakPiece(ctx context.Context, v chosenVoice, text string) ([]byte, error) {
+	if v.wav != "" { // graphics card engine
+		text = withEnding(text)
+	}
+	return r.eng.speak(ctx, text, v.builtin, v.wav, v.ref, v.speed)
+}
+
+// speechWithClips answers a message that contains soundbites with ONE WAV. Every spoken piece is made
+// first; only then are pieces and clips joined, in the order they were written.
+func (r *relay) speechWithClips(w http.ResponseWriter, req *http.Request, voice string, speedIn *float64, parts []piece) {
+	var v chosenVoice
+	needVoice := false
+	for _, pc := range parts {
+		if pc.clip == "" && hasWords(pc.text) {
+			needVoice = true
+		}
+	}
+	if needVoice {
+		var status int
+		var err error
+		if v, status, err = r.voiceSetup(voice, speedIn); err != nil {
+			speechError(w, status, err.Error())
+			return
+		}
+	}
+	ctx, cancel := context.WithTimeout(req.Context(), 4*time.Minute)
+	defer cancel()
+	began := time.Now()
+	type done struct {
+		pcm  []byte
+		rate int
+	}
+	made := make([]*done, len(parts))
+	rate := 0
+	for i, pc := range parts {
+		if pc.clip != "" || !hasWords(pc.text) {
+			continue
+		}
+		audio, err := r.speakPiece(ctx, v, pc.text)
+		if err != nil {
+			var ee errEngine
+			code := 500
+			if errors.As(err, &ee) {
+				code = 503
+			}
+			logf("speech failed: %v", err)
+			speechError(w, code, err.Error())
+			return
+		}
+		rt, pcm, err := parseWAV(audio)
+		if err != nil {
+			speechError(w, 500, "The engine's audio could not be read.")
+			return
+		}
+		if rate == 0 {
+			rate = rt
+		}
+		if rt != rate {
+			speechError(w, 500, "The engine changed its sample rate inside one message.")
+			return
+		}
+		made[i] = &done{pcm, rt}
+	}
+	// Collect what is to be played, in the written order.
+	type chunk struct {
+		rate, ch int
+		pcm      []byte
+	}
+	var chunks []chunk
+	total, played := 0.0, 0
+	for i, pc := range parts {
+		if pc.clip != "" {
+			c, ok := r.sounds.audio(pc.clip)
+			if !ok {
+				continue // removed while the message was being made
+			}
+			if total+c.secs() > sbMaxTotal {
+				continue
+			}
+			total += c.secs()
+			chunks = append(chunks, chunk{c.rate, c.ch, c.pcm})
+			played++
+		} else if made[i] != nil {
+			chunks = append(chunks, chunk{made[i].rate, 1, made[i].pcm})
+		}
+	}
+	if len(chunks) == 0 {
+		speechError(w, 400, "Nothing to play: the soundbites in this message do not exist any more.")
+		return
+	}
+	// One format for the whole file: the highest rate and the most channels of its pieces. A message of
+	// clips only keeps the clips' own format; speech (mono) is repeated in both channels next to a stereo clip.
+	outRate, outCh := 0, 1
+	for _, c := range chunks {
+		if c.rate > outRate {
+			outRate = c.rate
+		}
+		if c.ch > outCh {
+			outCh = c.ch
+		}
+	}
+	var out []byte
+	for _, c := range chunks {
+		pcm := c.pcm
+		if c.rate != outRate {
+			var err error
+			if pcm, err = resamplePCM(ctx, r.ffmpeg, pcm, c.ch, c.rate, outRate); err != nil {
+				speechError(w, 500, err.Error())
+				return
+			}
+		}
+		if c.ch < outCh {
+			pcm = toStereo(pcm)
+		}
+		if len(out) > 0 {
+			out = append(out, silence(outRate, outCh, sbGapMs)...)
+		}
+		out = append(out, pcm...)
+	}
+	logf("message with %d soundbite(s), %d piece(s), voice \"%s\": %.2f s", played, len(parts), voice, time.Since(began).Seconds())
+	w.Header().Set("Content-Type", "audio/wav")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(buildWAVn(outRate, outCh, out))
 }
 
 // ---- control panel ------------------------------------------------------------------
@@ -298,6 +450,14 @@ func (r *relay) panel(w http.ResponseWriter, req *http.Request) {
 		writeJSONNoCORS(w, 200, map[string]interface{}{"version": version, "port": port, "engine": r.eng.status(),
 			"voices": r.voices.list(), "voicesDir": r.voices.dir, "speakable": r.speakable(), "samples": sampleVoiceNames, "builtin": r.eng.builtinVoices(), "steps": r.eng.getSteps(),
 			"language": lang, "numbers": numbers, "languages": languages, "formats": r.saveFormats()})
+	case req.Method == http.MethodGet && req.URL.Path == "/api/soundbites":
+		r.soundbiteList(w)
+	case req.Method == http.MethodPost && req.URL.Path == "/api/soundbites/add":
+		r.soundbiteAdd(w, req)
+	case req.Method == http.MethodPost && req.URL.Path == "/api/soundbites/delete":
+		r.soundbiteDelete(w, req)
+	case req.Method == http.MethodGet && req.URL.Path == "/api/soundbites/play":
+		r.soundbitePlay(w, req)
 	case req.Method == http.MethodPost && req.URL.Path == "/api/voices/draft":
 		r.newDraft(w, req)
 	case req.Method == http.MethodGet && strings.HasPrefix(req.URL.Path, "/api/voices/draft/"):
@@ -545,7 +705,7 @@ func (r *relay) newDraft(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	id := randomHex(8)
-	if err := toWAV(req.Context(), r.ffmpeg, in.Name(), r.draftPath(id)); err != nil {
+	if err := toWAV(req.Context(), r.ffmpeg, in.Name(), r.draftPath(id), maxSecs+1); err != nil {
 		os.Remove(r.draftPath(id))
 		speechError(w, 400, err.Error())
 		return
@@ -581,4 +741,13 @@ func (r *relay) cleanDrafts() {
 			os.Remove(filepath.Join(r.drafts, e.Name()))
 		}
 	}
+}
+
+// num reads a number from the request, falls back to def, and keeps it inside [lo, hi].
+func num(m map[string]interface{}, key string, def, lo, hi float64) float64 {
+	v, ok := m[key].(float64)
+	if !ok || v != v {
+		return def
+	}
+	return math.Max(lo, math.Min(hi, v))
 }

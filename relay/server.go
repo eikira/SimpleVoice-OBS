@@ -260,8 +260,9 @@ type relay struct {
 	http    *http.Client
 	eng     *engine
 	voices  voiceStore
-	ffmpeg  string // path of ffmpeg, "" if not installed
-	drafts  string // recordings waiting for the user's review
+	ffmpeg  string      // path of ffmpeg, "" if not installed
+	drafts  string      // recordings waiting for the user's review
+	sounds  *soundbites // sound clips played for :NAME: in a message (nil in tests that do not use them)
 	fmtOnce sync.Once
 	fmts    []string
 }

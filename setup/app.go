@@ -22,18 +22,23 @@ var payload embed.FS
 const (
 	appName = "SimpleVoice OBS"
 	// setupBuild numbers the test builds of the installer. It shows in the window, the log, the Apps list and the file name.
-	setupBuild = "1.0.3"
-	appExeName = "SimpleVoiceOBSRelay.exe"
+	setupBuild = "1.0.4"
 	regUninst  = `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\SimpleVoiceOBS`
 	runValue   = "SimpleVoiceOBS"
 	regRun     = `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
 )
 
+// appExeName is the relay program's file name.
+var appExeName = pickStr(isUnix, "SimpleVoiceOBSRelay", "SimpleVoiceOBSRelay.exe")
+
+// uninstallName is the uninstaller's file name (a copy of this program).
+var uninstallName = pickStr(isUnix, "Uninstall", "Uninstall.exe")
+
 // options are the choices on the setup page.
 type options struct{ Desktop, Autostart bool }
 
 func (i *installer) appExe() string       { return filepath.Join(i.dir, appExeName) }
-func (i *installer) uninstallExe() string { return filepath.Join(i.dir, "Uninstall.exe") }
+func (i *installer) uninstallExe() string { return filepath.Join(i.dir, uninstallName) }
 
 // ownedFiles are the files setup puts into the install folder. voices\ and anything else the
 // user adds there are never touched.
@@ -45,10 +50,11 @@ func (i *installer) ownedFiles() []string {
 
 // ownedOutside are folders the program makes outside the install folder (its log and engine script).
 func (i *installer) ownedOutside() []string {
-	if i.appData == "" {
-		return nil
+	var out []string
+	if i.appData != "" {
+		out = append(out, i.appData)
 	}
-	return []string{i.appData}
+	return append(out, i.unixOutside()...)
 }
 
 // stopApp asks a running relay to close, so its files can be replaced or removed.
@@ -132,6 +138,9 @@ foreach ($p in $places) {
 `
 
 func (i *installer) shortcuts(ctx context.Context, action string) error {
+	if isUnix {
+		return nil // the Mac and Linux entries are made by registerUnix
+	}
 	f, err := os.CreateTemp("", "ov-shortcuts-*.ps1")
 	if err != nil {
 		return err
@@ -154,6 +163,9 @@ func (i *installer) reg(ctx context.Context, key, name, value string) error {
 // register adds the entry in Windows' list of installed apps, the shortcuts, and the optional
 // start with Windows.
 func (i *installer) register(ctx context.Context) error {
+	if isUnix {
+		return i.registerUnix()
+	}
 	if err := i.shortcuts(ctx, "create"); err != nil {
 		return fmt.Errorf("shortcuts: %w", err)
 	}
@@ -173,6 +185,10 @@ func (i *installer) register(ctx context.Context) error {
 
 // unregister removes everything register made. Missing entries are fine.
 func (i *installer) unregister(ctx context.Context) {
+	if isUnix {
+		i.unregisterUnix()
+		return
+	}
 	i.shortcuts(ctx, "remove")
 	i.shell(ctx, nil, func(string) {}, "reg.exe", "delete", regUninst, "/f")
 	i.shell(ctx, nil, func(string) {}, "reg.exe", "delete", regRun, "/v", runValue, "/f")
@@ -196,6 +212,11 @@ func (i *installer) launch() error {
 func selfDelete(dir string) {
 	self, err := os.Executable()
 	if err != nil || filepath.Dir(self) != dir {
+		return
+	}
+	if isUnix { // a running program can delete itself here
+		os.Remove(self)
+		os.Remove(dir)
 		return
 	}
 	script := `ping 127.0.0.1 -n 4 >nul & del /f /q "` + self + `" & rmdir "` + dir + `"`

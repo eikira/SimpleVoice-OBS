@@ -1315,12 +1315,9 @@ func TestPlannedSizesCountSharedPartsOnceAndSkipInstalled(t *testing.T) {
 	}
 }
 
-func TestStartNeedsAnEngineAndPassesTheSelection(t *testing.T) {
+func TestStartPassesTheSelection(t *testing.T) {
 	_, ts := testServer(t, func(context.Context) error { return nil })
 	host := strings.TrimPrefix(ts.URL, "http://")
-	if c := post(t, ts.URL+"/start", `{"accepted":true,"components":["asr"]}`, true, host); c != 400 {
-		t.Fatalf("no engine ticked must be refused: %d", c)
-	}
 	gotSel = nil
 	if c := post(t, ts.URL+"/start", `{"accepted":true,"components":["cpu","asr"]}`, true, host); c != 200 && c != 204 {
 		t.Fatalf("%d", c)
@@ -1596,7 +1593,7 @@ func TestGraphicsCardGuide(t *testing.T) {
 	}{
 		{"", 0, 0, false, "none"},
 		{"NVIDIA GeForce GTX 1060", 6144, 6.1, false, "unsupported"},
-		{"NVIDIA GeForce GTX 1660", 6144, 7.5, true, "ok"},
+		{"NVIDIA GeForce GTX 1660", 6144, 7.5, true, "low"},
 		{"NVIDIA GeForce RTX 3050", 4096, 8.6, true, "low"},
 		{"NVIDIA GeForce RTX 3060", 12288, 8.6, true, "good"},
 		{"NVIDIA GeForce RTX 5070", 12227, 12.0, true, "good"},
@@ -1653,5 +1650,22 @@ func TestSampleVoiceListMatchesTheWorker(t *testing.T) {
 	var names []string
 	if json.Unmarshal(out, &names) != nil || strings.Join(names, ",") != strings.Join(sampleVoices, ",") {
 		t.Fatalf("worker has %v, setup has %v", names, sampleVoices)
+	}
+}
+
+func TestSoundbitesOnlyNeedsNoEngine(t *testing.T) {
+	var ran int32
+	_, ts := testServer(t, func(context.Context) error { atomic.AddInt32(&ran, 1); return nil })
+	if got := post(t, ts.URL+"/start", `{"accepted":true,"components":[]}`, true, ""); got != 200 {
+		t.Fatalf("soundbites only: got %d", got)
+	}
+}
+
+func TestSoundbitesOnlyPlanIsSmall(t *testing.T) {
+	i := &installer{dir: t.TempDir()}
+	all, _ := i.planned(selection{CPU: true, GPU: true, ASR: true})
+	none, load := i.planned(selection{})
+	if none != 250 || load != 100 || none >= all {
+		t.Fatalf("soundbites only: %d MB disk, %d MB download (everything: %d MB disk)", none, load, all)
 	}
 }

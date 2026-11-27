@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,7 +29,7 @@ import (
 //go:embed worker.py
 var workerPy []byte
 
-const version = "1.0.3"
+const version = "1.0.4"
 
 var logOut io.Writer = os.Stdout
 
@@ -152,7 +153,7 @@ func loadConfig(flagHost, flagPort string) config {
 		steps = 32
 	}
 	eng := pick("", "ENGINEDIR", "ENGINEDIR", appDir())
-	py := pick("", "PYTHON", "PYTHON", filepath.Join(eng, "runtime", "python", "python.exe"))
+	py := pick("", "PYTHON", "PYTHON", defaultPython(eng))
 	return config{host: pick(flagHost, "HOST", "HOST", "127.0.0.1"), port: pick(flagPort, "PORT", "PORT", "8787"),
 		engineDir: eng, python: py, ffmpeg: pick("", "FFMPEG", "FFMPEG", ""), steps: steps, voices: pick("", "VOICES", "VOICES", defaultVoicesDir()), engine: strings.ToLower(pick("", "ENGINE", "ENGINE", "auto"))}
 }
@@ -294,6 +295,7 @@ func main() {
 	r := newRelay(eng, voiceStore{dir: cfg.voices})
 	r.ffmpeg = findFFmpeg(cfg.engineDir, cfg.ffmpeg)
 	r.drafts = filepath.Join(dataDir(), "drafts")
+	r.sounds = newSoundbites(filepath.Join(dataDir(), "soundbites"))
 	eng.start()
 	var ln net.Listener
 	var err error
@@ -352,4 +354,12 @@ func runningHere(cfg config) bool {
 	defer resp.Body.Close()
 	var m struct{ Protocol int }
 	return json.NewDecoder(resp.Body).Decode(&m) == nil && m.Protocol >= 2
+}
+
+// defaultPython is the Python that setup installed in the engine folder.
+func defaultPython(eng string) string {
+	if runtime.GOOS != "windows" {
+		return filepath.Join(eng, "runtime", "python", "bin", "python3")
+	}
+	return filepath.Join(eng, "runtime", "python", "python.exe")
 }

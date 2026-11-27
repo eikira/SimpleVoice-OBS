@@ -59,7 +59,7 @@ func (i *installer) saveInventory(inv *inventory) error {
 
 // shipped lists the files this build puts into the install folder, relative to it.
 func (i *installer) shipped() []string {
-	files := []string{appExeName, "Uninstall.exe", "LICENSE", "THIRD-PARTY-NOTICES.txt"}
+	files := []string{appExeName, uninstallName, "LICENSE", "THIRD-PARTY-NOTICES.txt"}
 	for _, f := range []string{kokoroModel, kokoroVoices} {
 		if has(i.kokoroDir(), f) {
 			files = append(files, filepath.ToSlash(filepath.Join("models", "kokoro", f)))

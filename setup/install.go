@@ -77,8 +77,9 @@ try:
     print("Windows long paths enabled:", winreg.QueryValueEx(k, "LongPathsEnabled")[0])
 except Exception as e:
     print("Windows long paths setting unknown:", e)`
-	modelScript = `import sys; from huggingface_hub import snapshot_download; snapshot_download(sys.argv[1], local_dir=sys.argv[2], allow_patterns=sys.argv[3:] or None)`
-	torchScript = `import torch; ok = torch.cuda.is_available(); print("torch", torch.__version__, "- NVIDIA GPU available:", ok); ok or print("No NVIDIA GPU is available to PyTorch. The processor engine will be used.")`
+	modelScript    = `import sys; from huggingface_hub import snapshot_download; snapshot_download(sys.argv[1], local_dir=sys.argv[2], allow_patterns=sys.argv[3:] or None)`
+	torchScript    = `import torch; ok = torch.cuda.is_available(); print("torch", torch.__version__, "- NVIDIA GPU available:", ok); ok or print("No NVIDIA GPU is available to PyTorch. The processor engine will be used.")`
+	torchScriptMac = `import torch; ok = torch.backends.mps.is_available(); print("torch", torch.__version__, "- Apple GPU (MPS) available:", ok); ok or print("The Apple GPU is not available to PyTorch. The processor engine will be used.")`
 )
 
 // A download that receives nothing for this long is cut off and retried.
@@ -126,6 +127,12 @@ func newInstaller(dir string, logf func(string)) *installer {
 		exec:  runCmd,
 		shell: runCmd,
 		appData: func() string {
+			if isUnix {
+				if d, err := os.UserConfigDir(); err == nil { // ~/Library/Application Support, where the relay keeps its own files
+					return filepath.Join(d, "SimpleVoiceOBS")
+				}
+				return ""
+			}
 			if d := os.Getenv("LOCALAPPDATA"); d != "" {
 				return filepath.Join(d, "SimpleVoiceOBS")
 			}
@@ -142,7 +149,7 @@ func newInstaller(dir string, logf func(string)) *installer {
 		},
 		wait:      retryWait,
 		retries:   retryCount,
-		pythonURL: pythonURL, pythonSHA: pythonSHA,
+		pythonURL: unixPick(macPythonURL, linuxPythonURL, pythonURL), pythonSHA: unixPick(macPythonSHA, linuxPythonSHA, pythonSHA),
 		pipURL: pipURL, pipSHA: pipSHA,
 		kokoroBase: kokoroBase,
 		kokoroSHA:  map[string]string{kokoroModel: kokoroModelSHA, kokoroVoices: kokoroVoicesSHA},
@@ -231,17 +238,34 @@ func (i *installer) needs() []need {
 }
 
 func (i *installer) runtimeDir() string { return filepath.Join(i.dir, "runtime", "python") }
-func (i *installer) pythonExe() string  { return filepath.Join(i.runtimeDir(), "python.exe") }
-func (i *installer) modelDir() string   { return filepath.Join(i.dir, "models", "OmniVoice") }
-func (i *installer) asrDir() string     { return filepath.Join(i.dir, "models", "whisper-large-v3-turbo") }
-func (i *installer) kokoroDir() string  { return filepath.Join(i.dir, "models", "kokoro") }
-func (i *installer) tmpDir() string     { return filepath.Join(i.dir, "downloads") }
-func (i *installer) site() string       { return filepath.Join(i.runtimeDir(), "Lib", "site-packages") }
+func (i *installer) pythonExe() string {
+	if isUnix {
+		return filepath.Join(i.runtimeDir(), "bin", "python3")
+	}
+	return filepath.Join(i.runtimeDir(), "python.exe")
+}
+func (i *installer) modelDir() string  { return filepath.Join(i.dir, "models", "OmniVoice") }
+func (i *installer) asrDir() string    { return filepath.Join(i.dir, "models", "whisper-large-v3-turbo") }
+func (i *installer) kokoroDir() string { return filepath.Join(i.dir, "models", "kokoro") }
+func (i *installer) tmpDir() string    { return filepath.Join(i.dir, "downloads") }
+func (i *installer) site() string {
+	if isUnix {
+		return filepath.Join(i.runtimeDir(), "lib", "python3.11", "site-packages")
+	}
+	return filepath.Join(i.runtimeDir(), "Lib", "site-packages")
+}
 
 // pkgDone tells if a pip package of exactly this version is in the install folder.
 func (i *installer) pkgDone(name, version string) bool {
 	_, err := os.Stat(filepath.Join(i.site(), name+"-"+version+".dist-info"))
 	return err == nil
+}
+
+func pickStr(cond bool, a, b string) string {
+	if cond {
+		return a
+	}
+	return b
 }
 
 func has(dir string, names ...string) bool {
@@ -408,13 +432,13 @@ func (i *installer) install(ctx context.Context) error {
 			steps = append(steps, step{name, fn})
 		}
 	}
-	add(sel.GPU, "Checking the NVIDIA GPU", i.checkGPU)
+	add(sel.GPU, pickStr(isMac, "Checking the Apple GPU", "Checking the NVIDIA GPU"), i.checkGPU)
 	add(true, "Installing SimpleVoice OBS Relay", i.installProgram)
 	add(true, "Installing Python", i.installPython)
 	add(sel.needLibs(), "Installing PyTorch (large download)", i.installTorch)
 	add(sel.needLibs(), "Installing OmniVoice", i.installOmniVoice)
 	add(true, "Installing ffmpeg (audio conversion)", i.installFFmpeg)
-	add(sel.CPU, "Installing the processor engine (works without an NVIDIA card)", i.installKokoro)
+	add(sel.CPU, pickStr(isMac, "Installing the processor engine", "Installing the processor engine (works without an NVIDIA card)"), i.installKokoro)
 	add(sel.needLibs(), "Checking PyTorch", i.checkTorch)
 	add(sel.GPU, "Downloading the OmniVoice model (large download)", i.downloadModel)
 	add(sel.CPU, "Downloading the processor engine voices", i.downloadKokoro)
@@ -436,7 +460,15 @@ func (i *installer) install(ctx context.Context) error {
 	if i.torchInfo != "" {
 		i.logf("GPU check: " + i.torchInfo)
 	}
-	i.logf("SimpleVoice OBS is ready. Start it from the Start menu. Add your voices in its control panel.")
+	if isUnix {
+		if isLinux {
+			i.logf("To use the relay from another computer: allow its port in the Linux firewall, for example: sudo ufw allow from 192.168.0.0/16 to any port 8787 proto tcp (your network range). The control panel's Network page explains it.")
+		}
+		i.logf(unixPick("SimpleVoice OBS is ready. Start it from Launchpad or Spotlight (\"SimpleVoice OBS\"). Add your voices in its control panel.",
+			"SimpleVoice OBS is ready. Start it from your applications menu (\"SimpleVoice OBS\"). Add your voices in its control panel.", ""))
+	} else {
+		i.logf("SimpleVoice OBS is ready. Start it from the Start menu. Add your voices in its control panel.")
+	}
 	return nil
 }
 
@@ -532,6 +564,13 @@ func (i *installer) probe(ctx context.Context, host string) string {
 }
 
 func (i *installer) checkGPU(ctx context.Context) error {
+	if isMac {
+		if err := macCheckMachine(); err != nil {
+			return err
+		}
+		i.logf("Apple Silicon found. The cloning engine will use the Apple GPU (Metal, \"MPS\") through PyTorch.")
+		return nil
+	}
 	var lines []string
 	err := i.exec(ctx, i.env(), func(l string) { lines = append(lines, l) },
 		"nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits")
@@ -553,6 +592,9 @@ func (i *installer) checkGPU(ctx context.Context) error {
 func (i *installer) installPython(ctx context.Context) error {
 	if err := os.MkdirAll(i.tmpDir(), 0o755); err != nil {
 		return err
+	}
+	if isUnix {
+		return i.installPythonMac(ctx)
 	}
 	if _, err := os.Stat(i.pythonExe()); err != nil {
 		zipPath := filepath.Join(i.tmpDir(), "python.zip")
@@ -593,6 +635,41 @@ func (i *installer) installPython(ctx context.Context) error {
 	return nil
 }
 
+// installPythonMac unpacks the standalone Python. It already contains pip.
+func (i *installer) installPythonMac(ctx context.Context) error {
+	if isLinux && linuxArch != "amd64" {
+		return errors.New("this computer is not a 64 bit Intel/AMD machine. The Linux version supports only that")
+	}
+	if _, err := os.Stat(i.pythonExe()); err == nil {
+		i.skip("Python", true)
+		return nil
+	}
+	tgz := filepath.Join(i.tmpDir(), "python.tar.gz")
+	if err := i.retry(ctx, "Download of Python", func() error {
+		return i.fetch(ctx, i.pythonURL, tgz, i.pythonSHA, "")
+	}, i.setupNeed()); err != nil {
+		return err
+	}
+	partial := i.runtimeDir() + ".partial"
+	os.RemoveAll(partial)
+	if err := untarGz(tgz, partial); err != nil {
+		return err
+	}
+	// the archive holds one folder, "python"
+	if err := os.MkdirAll(filepath.Dir(i.runtimeDir()), 0o755); err != nil {
+		return err
+	}
+	if err := os.Rename(filepath.Join(partial, "python"), i.runtimeDir()); err != nil {
+		return err
+	}
+	os.RemoveAll(partial)
+	if _, err := os.Stat(filepath.Join(i.site(), "pip")); err != nil {
+		return errors.New("this Python has no pip")
+	}
+	os.Remove(tgz)
+	return nil
+}
+
 func (i *installer) pip(ctx context.Context, what string, args ...string) error {
 	full := append(append([]string{}, pipFlags...), args...)
 	return i.retry(ctx, what, func() error {
@@ -624,6 +701,13 @@ func (i *installer) explainSilentFailure(ctx context.Context, full []string) {
 }
 
 func (i *installer) installTorch(ctx context.Context) error {
+	if isUnix {
+		if i.pkgDone("torch", "2.8.0") && i.pkgDone("torchaudio", "2.8.0") {
+			i.logf("PyTorch is already installed.")
+			return nil
+		}
+		return i.pip(ctx, "PyTorch install", macTorchPkgs...)
+	}
 	site, done := filepath.Join(i.runtimeDir(), "Lib", "site-packages"), true
 	for _, w := range torchWheels {
 		parts := strings.SplitN(w, "-", 3) // name, version, rest
@@ -851,7 +935,7 @@ func (i *installer) checkTorch(ctx context.Context) error {
 			i.torchInfo = l
 		}
 		i.logf(l)
-	}, i.pythonExe(), "-c", torchScript)
+	}, i.pythonExe(), "-c", pickStr(isMac, torchScriptMac, torchScript))
 }
 
 type modelFile struct {

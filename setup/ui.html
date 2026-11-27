@@ -47,15 +47,15 @@ pre{height:240px;overflow:auto;white-space:pre-wrap;font-size:12px;background:#0
     <div id="total" class="total"></div>
     <div class="small" id="gpunote"></div>
     <p class="small">Sizes are estimates. Parts that are already installed are not downloaded again. Install folder: <code id="dir"></code></p>
-    <p class="small"><a href="#" id="pAll">Everything</a> &middot; <a href="#" id="pCpu">Smallest (processor engine only)</a></p>
+    <p class="small"><a href="#" id="pAll">Everything</a> &middot; <a href="#" id="pCpu">Processor engine only</a> &middot; <a href="#" id="pSb">Soundbites only (smallest)</a></p>
   </div>
-  <div class="box licence">
+  <div class="box licence" id="lic">
     <p>The voice model (OmniVoice) is licensed CC-BY-NC: use it for <b>non-commercial purposes only</b>. Only clone voices you are allowed to clone.</p>
     <label><input type="checkbox" id="ok"> I understand and will use it for non-commercial purposes only.</label>
   </div>
   <div class="box">
     <label><input type="checkbox" id="desktop" checked> Create a desktop shortcut</label>
-    <label><input type="checkbox" id="auto"> Start SimpleVoice OBS when Windows starts</label>
+    <label><input type="checkbox" id="auto"> <span class="osname">Start SimpleVoice OBS when Windows starts</span></label>
     <label><input type="checkbox" id="launch" checked> Open SimpleVoice OBS when setup is finished</label>
   </div>
   <p><button class="main" id="go" disabled>Install</button></p>
@@ -75,7 +75,7 @@ pre{height:240px;overflow:auto;white-space:pre-wrap;font-size:12px;background:#0
   <div id="donehelp">
     <p>Next steps:</p>
     <ol>
-      <li>In the control panel that opens, add your own voice: a clean recording of one speaker. 3 to 10 seconds works best; up to 20 seconds is accepted. The sample voices you ticked are already there.</li>
+      <li>In the control panel that opens, add your own voice: a clean recording of one speaker. 3 to 10 seconds works best; up to 20 seconds is accepted. The sample voices you ticked are already there. (Soundbites only: add sound clips under "Soundbites (beta)" instead.)</li>
       <li>In the VoiceStudio+SimpleVoice OBS Connector extension (0.2.0 or newer) open Settings, section 2, choose <i>SimpleVoice OBS</i> (or click <i>Detect</i>) and click <i>Load voices</i> in section 3.</li>
       <li>Keep your OBS Browser Source URL as it is.</li>
     </ol>
@@ -90,11 +90,12 @@ pre{height:240px;overflow:auto;white-space:pre-wrap;font-size:12px;background:#0
   <p><button class="main" id="retry">Try again</button> <button id="copy">Copy log</button></p>
 </div>
 
+<p><button id="copy2">Copy log</button> <span class="small" id="copied"></span></p>
 <details class="box" id="logbox"><summary>Details</summary><pre id="log"></pre>
   <div class="small"><b>Internet access.</b> If a firewall blocks setup, allow these programs to reach these sites:<ul id="access"></ul></div></details>
 
 <details class="box" id="rmbox"><summary>Uninstall</summary>
-  <p>Removes SimpleVoice OBS, Python, PyTorch, OmniVoice, the model, the shortcuts and the Windows entries.</p>
+  <p>Removes SimpleVoice OBS, Python, PyTorch, OmniVoice, the model, the shortcuts and the <span class="osname2">Windows entries</span>.</p>
   <label><input type="checkbox" id="vox"> Also delete my voices</label>
   <p><button id="rm">Uninstall</button></p></details>
 
@@ -109,8 +110,8 @@ const post = (u, b) => fetch(u, {method: "POST", headers: H, body: JSON.stringif
 const show = (id, on) => $(id).hidden = !on;
 const canGo = () => {
   const room = hw && hw.freeMB >= 0 ? hw.freeMB >= planned.diskMB + 1024 : true;
-  const engine = chosen.cpu || chosen.gpu || (comp && JSON.parse(comp).some(c => c.installed && (c.id == "cpu" || c.id == "gpu")));
-  $("go").disabled = !($("ok").checked && engine && room);
+  const needOk = chosen.gpu || (comp && JSON.parse(comp).some(c => c.installed && c.id == "gpu"));
+  $("go").disabled = !((!needOk || $("ok").checked) && room);
 };
 $("ok").onchange = canGo;
 async function replan() {
@@ -121,7 +122,8 @@ async function replan() {
   const bad = free !== null && free < planned.diskMB + 1024;
   t.className = "total" + (bad ? " err" : "");
   if (bad) t.textContent += " That is not enough: free some space or untick a part.";
-  if (!chosen.cpu && !chosen.gpu) t.textContent += " Tick at least one engine.";
+  if (!chosen.cpu && !chosen.gpu) t.textContent += " Soundbites only: sound clips will play, but text will not be read aloud until you add an engine (run Setup again).";
+  show("lic", chosen.gpu || (comp && JSON.parse(comp).some(c => c.installed && c.id == "gpu")));
   canGo(); rows();
 }
 let built = "";
@@ -184,9 +186,10 @@ function voices(list) {
 }
 $("pAll").onclick = e => { e.preventDefault(); const u = usable(); Object.assign(chosen, {cpu: true, gpu: u, asr: u}); replan(); };
 $("pCpu").onclick = e => { e.preventDefault(); Object.assign(chosen, {cpu: true, gpu: false, asr: false}); replan(); };
+$("pSb").onclick = e => { e.preventDefault(); Object.assign(chosen, {cpu: false, gpu: false, asr: false}); replan(); };
 async function start() {
   wantLaunch = $("launch").checked;
-  const r = await post("/start", {accepted: $("ok").checked, desktop: $("desktop").checked, autostart: $("auto").checked,
+  const r = await post("/start", {accepted: $("lic").hidden ? true : $("ok").checked, desktop: $("desktop").checked, autostart: $("auto").checked,
     components: Object.keys(chosen).filter(k => chosen[k]),
     voices: voiceList.filter(v => vchosen[v.name]).map(v => v.name)});
   if (!r.ok) $("reason").textContent = await r.text();
@@ -194,7 +197,17 @@ async function start() {
 $("go").onclick = $("retry").onclick = start;
 $("open").onclick = $("open2").onclick = () => post("/launch");
 $("close").onclick = $("close2").onclick = () => post("/quit");
-$("copy").onclick = () => navigator.clipboard.writeText($("log").textContent);
+const copyLog = async () => {
+  const text = $("log").textContent;
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) {
+    const t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select();
+    document.execCommand("copy"); t.remove();
+  }
+  $("copied").textContent = "Copied.";
+  setTimeout(() => $("copied").textContent = "", 3000);
+};
+$("copy").onclick = $("copy2").onclick = copyLog;
 $("rm").onclick = async () => {
   if (!confirm("Remove SimpleVoice OBS from this PC?")) return;
   await post("/uninstall", {deleteVoices: $("vox").checked});
@@ -204,18 +217,22 @@ async function poll() {
     const s = await (await fetch("/state?from=" + next)).json();
     $("dir").textContent = s.dir;
     hw = s.hardware; libs = s.libs;
+    if (hw && (hw.os === "darwin" || hw.os === "linux")) {
+      document.querySelectorAll(".osname").forEach(e => e.textContent = "Start SimpleVoice OBS when I log in to this computer");
+      document.querySelectorAll(".osname2").forEach(e => e.textContent = "start-at-login entry");
+    }
     if (!gotHw && hw) {
       gotHw = true;
       chosen.gpu = chosen.asr = hw.gpuUsable;
       const ng = $("nogpu");
       if (!hw.gpuUsable) {
         ng.hidden = false;
-        ng.textContent = hw.gpuFound ? "Your graphics card cannot be used: " + hw.gpuName + "." : "No NVIDIA graphics card was found.";
+        ng.textContent = hw.gpuFound ? "Your graphics card cannot be used: " + hw.gpuName + "." : (hw.os === "darwin" ? "This Mac has no Apple Silicon chip." : "No NVIDIA graphics card was found.");
         const sub = document.createElement("span");
-        sub.textContent = "The graphics card engine needs an NVIDIA GTX 16 series, RTX 20 series or newer card with 6 GB video memory. Setup continues with the processor engine only: built-in voices, no voice cloning, no transcription. Nothing that only the graphics card engine needs is downloaded." + (hw.gpuFound ? "" : " If you do have an NVIDIA card, install or update its driver and run Setup again.");
+        sub.textContent = "The graphics card engine needs an NVIDIA GTX 16 series, RTX 20 series or newer card with 6 GB video memory (GTX 16 series works but is very slow and not recommended). Setup continues with the processor engine only: built-in voices, no voice cloning, no transcription. Nothing that only the graphics card engine needs is downloaded." + (hw.gpuFound ? "" : " If you do have an NVIDIA card, install or update its driver and run Setup again.");
         ng.append(sub);
       } else {
-        $("gpunote").textContent = "NVIDIA graphics card: " + hw.gpuName + ".";
+        $("gpunote").textContent = (hw.os === "darwin" ? "Mac: " : "NVIDIA graphics card: ") + hw.gpuName + ".";
         const ic = document.createElement("span"); ic.className = "i"; ic.textContent = "i"; ic.title = hw.info; $("gpunote").append(ic);
       }
     }

@@ -6,14 +6,14 @@ Together with the source, this file is enough to continue the project. Details o
 ## 1. What the product is
 **SimpleVoice OBS** lets a streamer type text and have it spoken in a chosen voice into OBS. A Windows installer (Setup) installs a
 background program (the Relay) and an engine (Python, PyTorch, OmniVoice for the graphics card, Kokoro for the processor, Whisper for transcribing).
-Owner: eikira. Licence: GPL-3.0. Version 1.0.0 is the first production release; 1.0.3 is the current one.
+Owner: eikira. Licence: GPL-3.0. Version 1.0.0 is the first production release; 1.0.4 is the current one.
 
 ## 2. Names (use exactly these)
 | Thing | Name |
 |---|---|
 | Product | SimpleVoice OBS |
 | Background program | SimpleVoice OBS Relay (`SimpleVoiceOBSRelay.exe`, tray tooltip) |
-| Installer | `SimpleVoice-OBS-Setup.exe` (shipped in `SimpleVoice-OBS-Setup-<version>-Windows.zip`) |
+| Installer | `SimpleVoice-OBS-Setup.exe` (`SimpleVoice-OBS-Setup-<version>-Windows.zip`), `SimpleVoice-OBS-Setup-linux-amd64` (`...-Linux.zip`), `SimpleVoice-OBS-Setup-macOS-arm64` (`...-macOS.zip`) |
 | Chrome extension | VoiceStudio+SimpleVoice OBS Connector (formerly "VoiceStudio OBS Connector"; the rename and re-release are a separate, later job) |
 | Standalone relay for VoiceStudio | VoiceStudio OBS Connector Relay (not renamed; may get a tiny rebuild for the extension name) |
 | Voice model | OmniVoice (this stays the engine name) |
@@ -50,6 +50,8 @@ Test builds before 1.0.0 are not supported: there is no migration code, testers 
 Needs Go 1.24+, Node 18+, Python 3 (for syntax check), bash. Nothing else.
 ```
 ./test.sh     # gofmt, vet (Linux + Windows), go test -race (relay, setup), node protocol tests. Must end with ALL CHECKS PASSED
+./build-linux.sh  # dist/SimpleVoice-OBS-Setup-linux-amd64
+./build-mac.sh    # dist/SimpleVoice-OBS-Setup-macOS-arm64
 ./build.sh    # dist/SimpleVoice-OBS-Setup.exe (Windows amd64, windowsgui, -trimpath -ldflags "-s -w -H windowsgui")
 ```
 `build.sh` builds the relay exe into `setup/payload/`, copies `worker.py`, `LICENSE`, `THIRD-PARTY-NOTICES.txt` there, then builds Setup which embeds `payload/` (`//go:embed all:payload`).
@@ -67,6 +69,12 @@ Verified by the owner on test builds: the graphics card engine loads and speaks,
 
 ## 9. Pinned versions
 Python 3.11.9 embeddable, torch and torchaudio 2.8.0+cu128, `omnivoice==0.2.1`, `kokoro-onnx==0.6.1`, Whisper large-v3-turbo, imageio-ffmpeg. Size figures in Setup (`components.go`) are estimates; update them when versions change.
+
+## 9b. Features of 1.0.4
+- **Soundbites** (`relay/soundbites.go`, `soundbites_http.go`, `speechWithClips` in `speech.go`): a clip keeps its own rate (up to 48 kHz) and channels (mono or stereo; `toClipWAV` in `audio.go`). A message with clips is made as ONE WAV: all spoken pieces first, then everything is joined in the written order with 90 ms gaps. Output format = highest rate and most channels of its pieces; mono speech is repeated in both channels next to a stereo clip (`toStereo`); different rates are fixed with ffmpeg (`resamplePCM`). A clip-only message plays in the clip's own format. Test: `TestSoundbitesStereoStaysStereo`. Parked on purpose (they change how voices are stored): FLAC storage for clips and voices, and a soundbites-only Setup option.
+- **Soundbites only:** Setup allows no engine ticked (`handleStart` in `main.go` has no engine check; `planned()` then counts only the basic program). `engine.supervise` reports "Soundbites only" instead of "Engine files not found" when neither model folder exists. The licence box in `ui.html` shows only when the graphics card engine is ticked or installed.
+- **GTX 16 series** is tier "low" in `rate()` (`components.go`): works, very slow, not recommended. The text is in Setup, the component list and the README.
+- **Linux and macOS** share one code path in Setup (`isUnix`, `macapp.go`, `platform.go`); Linux is 64 bit Intel/AMD only, macOS Apple Silicon only.
 
 ## 10. Parked work
 1. (Done, extension 0.2.0: renamed, engine choice and Detect. The extension will read `min_speed` and limit its speed choices in a later update, 0.2.1.) Old note: rename the Chrome extension and add a switch between VoiceStudio and SimpleVoice. Needs the extension source; protocolVersion is 2 and `relay/tests` document the protocol.

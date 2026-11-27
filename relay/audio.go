@@ -9,20 +9,24 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
 
 // Any common recording is turned into the WAV the model wants with ffmpeg, which setup installs.
 
-const maxClipSeconds = "21" // converting stops here, so a recording over the 20 second limit is noticed without converting all of it
-
 // findFFmpeg looks for the ffmpeg that setup installed, then for one on the PATH.
 func findFFmpeg(engineDir, override string) string {
 	if override != "" {
 		return override
 	}
-	m, _ := filepath.Glob(filepath.Join(engineDir, "runtime", "python", "Lib", "site-packages", "imageio_ffmpeg", "binaries", "ffmpeg*"))
+	site := filepath.Join(engineDir, "runtime", "python", "Lib", "site-packages")
+	if runtime.GOOS != "windows" {
+		site = filepath.Join(engineDir, "runtime", "python", "lib", "python3.11", "site-packages")
+	}
+	m, _ := filepath.Glob(filepath.Join(site, "imageio_ffmpeg", "binaries", "ffmpeg*"))
 	if len(m) > 0 {
 		return m[0]
 	}
@@ -45,14 +49,16 @@ func sniffAudio(b []byte) bool {
 var errNoFFmpeg = errors.New("ffmpeg was not found. Run Setup again to install it.")
 
 // toWAV converts a recording to mono 24 kHz 16-bit WAV. Only the first 21 seconds are read: that is enough to see that a recording is over the limit.
-func toWAV(ctx context.Context, ffmpeg, in, out string) error {
+// toWAV converts a recording to mono 24 kHz WAV. Converting stops at limit seconds, so a recording
+// that is over the allowed length is noticed without converting all of it.
+func toWAV(ctx context.Context, ffmpeg, in, out string, limit int) error {
 	if ffmpeg == "" {
 		return errNoFFmpeg
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	c := exec.CommandContext(ctx, ffmpeg, "-nostdin", "-y", "-v", "error", "-i", in, "-vn", "-map_metadata", "-1",
-		"-ac", "1", "-ar", "24000", "-t", maxClipSeconds, "-c:a", "pcm_s16le", "-f", "wav", out)
+		"-ac", "1", "-ar", "24000", "-t", strconv.Itoa(limit), "-c:a", "pcm_s16le", "-f", "wav", out)
 	hideWindow(c)
 	var stderr bytes.Buffer
 	c.Stderr = &stderr
@@ -63,6 +69,44 @@ func toWAV(ctx context.Context, ffmpeg, in, out string) error {
 		return errors.New("This recording could not be read: " + strings.TrimSpace(lastLine(stderr.String())))
 	}
 	return nil
+}
+
+// toClipWAV makes a 16 bit WAV for a soundbite. The clip keeps its own sample rate and its channels
+// (mono stays mono, stereo stays stereo); more than 2 channels become stereo and a rate above 48 kHz
+// becomes 48 kHz.
+func toClipWAV(ctx context.Context, ffmpeg, in, out string, limit int) error {
+	if ffmpeg == "" {
+		return errNoFFmpeg
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	run := func(extra ...string) error {
+		args := append([]string{"-nostdin", "-y", "-v", "error", "-i", in, "-vn", "-map_metadata", "-1", "-t", strconv.Itoa(limit)}, extra...)
+		args = append(args, "-c:a", "pcm_s16le", "-f", "wav", out)
+		c := exec.CommandContext(ctx, ffmpeg, args...)
+		hideWindow(c)
+		var stderr bytes.Buffer
+		c.Stderr = &stderr
+		if err := c.Run(); err != nil {
+			if ctx.Err() != nil {
+				return errors.New("converting the clip took too long")
+			}
+			return errors.New("This clip could not be read: " + strings.TrimSpace(lastLine(stderr.String())))
+		}
+		return nil
+	}
+	if err := run(); err != nil {
+		return err
+	}
+	b, err := os.ReadFile(out)
+	if err != nil {
+		return err
+	}
+	if rate, _, _, err := parseWAVn(b); err == nil && rate >= 8000 && rate <= sbMaxRate {
+		return nil
+	}
+	// more than 2 channels, a rate above 48 kHz or below 8 kHz: one more pass
+	return run("-ac", "2", "-ar", strconv.Itoa(sbMaxRate))
 }
 
 func lastLine(s string) string {

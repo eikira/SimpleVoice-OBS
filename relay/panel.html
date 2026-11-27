@@ -27,7 +27,7 @@ pre{max-height:180px;overflow:auto;font-size:12px;white-space:pre-wrap}
 <div class="row" style="margin-top:8px"><label for="mode"><b>Engine</b></label>
 <select id="mode" class="grow">
 <option value="auto">Automatic: graphics card if there is one, otherwise processor</option>
-<option value="gpu">Graphics card (NVIDIA): best quality, can clone voices</option>
+<option value="gpu">Graphics card (NVIDIA, or Apple GPU on a Mac): best quality, can clone voices</option>
 <option value="cpu">Processor only: works on any PC, built-in voices only</option></select>
 <button id="apply">Apply and restart</button></div>
 <div class="row" style="margin-top:8px"><label for="quality"><b>Voice quality</b></label>
@@ -43,6 +43,7 @@ pre{max-height:180px;overflow:auto;font-size:12px;white-space:pre-wrap}
 <button id="copylog" class="small">Copy log</button></details></div>
 
 <h2>Connect the extension</h2>
+<div class="card" id="fwlinux" style="display:none"><b>Linux:</b> to use this relay from another computer, allow its port in the firewall: <code>sudo ufw allow from 192.168.0.0/16 to any port 8787 proto tcp</code> (your network range and port). The <b>Network</b> page has more.</div>
 <div class="card">In the <b>VoiceStudio+SimpleVoice OBS Connector</b> extension (0.2.0 or newer) open Settings, section 2, choose <b>SimpleVoice OBS</b> (or click <b>Detect</b>) and click <b>Load voices</b> in section 3. Its address is the <b>Relay address</b> (<code id="addr"></code>). Then copy the OBS Browser Source URL from the extension into OBS as before.<br>OBS or the extension on <b>another computer</b>? Choose the network address on the <a href="/network" target="_blank">Listening address</a> page. Pick your real home or office network, not a VPN. This control panel stays on this computer.</div>
 
 <h2>Voices</h2>
@@ -77,9 +78,43 @@ pre{max-height:180px;overflow:auto;font-size:12px;white-space:pre-wrap}
 <div class="small" id="fmtnote">Made as WAV: mono, 16-bit, 24 kHz. Saved files are always mono and 24 kHz; MP3 and AAC use 128 kbps.</div>
 <audio id="au" hidden></audio></div>
 
+<h2>Soundbites (beta)</h2>
+<div class="card" id="sbcard">
+<div class="small">Play a sound clip when a chat message contains an emote, written <b>:name:</b> (the way Rumble writes its emotes). Nothing is spoken for the clip. Text before and after it is spoken as usual, and everything is played in the order it was written.</div>
+<div class="row" style="margin-top:8px"><label for="sbname"><b>Emote name</b></label><input type="text" id="sbname" placeholder="choppa" maxlength="40" size="14">
+<span class="small">without the colons</span></div>
+<div class="row" style="margin-top:8px"><label for="sbfile"><b>Sound</b></label><input type="file" id="sbfile" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg,.aac" class="grow">
+<label for="sbvol"><b>Volume</b></label><select id="sbvol"><option value="0.5">Quiet</option><option value="1" selected>Normal</option><option value="1.5">Loud</option></select>
+<button class="main" id="sbadd">Add</button></div>
+<div class="small" id="sbmsg"></div>
+<div id="sblist" style="margin-top:8px"></div>
+<audio id="sbau" hidden></audio></div>
+
 <script>
+if(/linux/i.test(navigator.platform||navigator.userAgent)&&!/android/i.test(navigator.userAgent)){var fl=document.getElementById('fwlinux');if(fl)fl.style.display='';}
 const $=id=>document.getElementById(id),H={'X-Relay-Panel':'1'},J=o=>JSON.stringify(o);
 let S=null;
+ {const sbl=async()=>{let j;try{j=await (await fetch('/api/soundbites',{cache:'no-store'})).json()}catch{return}
+  const box=$('sblist');box.textContent='';
+  if(!j.soundbites||!j.soundbites.length){box.textContent='No soundbites yet.';box.className='small';return}
+  box.className='';
+  j.soundbites.forEach(e=>{const row=document.createElement('div');row.className='row';row.style.marginBottom='4px';
+   const nm=document.createElement('span');nm.className='grow';nm.textContent=':'+e.name+':  ('+e.seconds+' s)';
+   const pl=document.createElement('button');pl.textContent='Play';
+   pl.onclick=()=>{const a=$('sbau');a.src='/api/soundbites/play?name='+encodeURIComponent(e.name)+'&t='+Date.now();a.play().catch(()=>{})};
+   const dl=document.createElement('button');dl.textContent='Remove';
+   dl.onclick=async()=>{await fetch('/api/soundbites/delete',{method:'POST',headers:{...H,'Content-Type':'application/json'},body:J({name:e.name})});sbl()};
+   row.append(nm,pl,dl);box.appendChild(row)})};
+  $('sbadd').onclick=async()=>{const m=$('sbmsg'),b=$('sbadd'),f=$('sbfile').files[0];
+   if(!$('sbname').value.trim()){m.textContent='Type the emote name first.';m.className='small warn';return}
+   if(!f){m.textContent='Choose a sound file.';m.className='small warn';return}
+   b.disabled=true;m.textContent='Adding...';m.className='small';
+   try{const fd=new FormData();fd.append('name',$('sbname').value.trim());fd.append('volume',$('sbvol').value);fd.append('audio',f);
+    const r=await fetch('/api/soundbites/add',{method:'POST',headers:H,body:fd}),j=await r.json();
+    if(!r.ok||!j.ok){m.textContent=j.error||'It did not work.';m.className='small warn';return}
+    m.textContent='Added.';$('sbname').value='';$('sbfile').value='';sbl()}
+   catch(e){m.textContent='It did not work.';m.className='small warn'}finally{b.disabled=false}};
+  sbl();window.sbRefresh=sbl}
 let editing=false,busyReview=false,draft='';
 $('addr').textContent=location.origin;
 function el(t,c,x){const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}

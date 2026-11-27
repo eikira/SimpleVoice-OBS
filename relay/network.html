@@ -39,12 +39,30 @@ code{background:#0f1114;padding:1px 6px;border-radius:4px}
 <div class="note">If the extension runs on another PC, enter one of these as its Relay address (the adapter name is shown so you pick the right one):</div>
 <div id="forExt"></div>
 <div class="note" id="fw"><b>Firewall:</b> when the relay starts on a network address it makes one short connection attempt from that address to the gateway of that network, so your firewall (Windows Firewall, simplewall and others) can ask about this program. <b>Allow it for your private network.</b> If no question appears, check your firewall's list of allowed programs. To test: use <b>Detect relay</b> in the extension from the other PC.</div>
+<div class="warn" id="fwlinux" style="display:none"><b>Linux firewall:</b> if the extension on another computer cannot find this relay, the firewall of this computer may block the port. Check with <code>sudo ufw status</code>. If it says "active", allow the port: <code>sudo ufw allow from 192.168.0.0/16 to any port 8787 proto tcp</code> (use your own network range and your port if you changed it). To test, open <code>http://&lt;this computer's address&gt;:8787/</code> in a browser on the other computer.</div>
 <p class="note">There is no password. Anyone on the same network can send commands to this relay if they know your OBS ID. Use it only on a network you trust.</p>
 
 <script>
+if(/linux/i.test(navigator.platform||navigator.userAgent)&&!/android/i.test(navigator.userAgent)){var fl=document.getElementById('fwlinux');if(fl)fl.style.display='';}
 (function(){
   var state=null, chosen='127.0.0.1';
   function $(id){return document.getElementById(id)}
+  // navigator.clipboard only exists on secure pages (https or 127.0.0.1); on a network address it is missing. Fallback: hidden text field + execCommand.
+  function copyText(text,codeEl,done){
+    function fallback(){
+      var ok=false;
+      try{
+        var t=document.createElement('textarea');t.value=text;t.setAttribute('readonly','');
+        t.style.position='fixed';t.style.top='0';t.style.left='0';t.style.opacity='0';
+        document.body.appendChild(t);t.focus();t.select();t.setSelectionRange(0,text.length);
+        ok=document.execCommand('copy');document.body.removeChild(t);
+      }catch(e){ok=false}
+      if(!ok&&codeEl){try{var r=document.createRange();r.selectNodeContents(codeEl);var s=window.getSelection();s.removeAllRanges();s.addRange(r)}catch(e){}}
+      done(ok);
+    }
+    if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(function(){done(true)},fallback)}
+    else fallback();
+  }
   function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!==undefined)e.textContent=x;return e}
   function tagFor(a){
     if(a.kind==='shared')return ['PROBABLY A VPN','vpn'];
@@ -87,8 +105,12 @@ code{background:#0f1114;padding:1px 6px;border-radius:4px}
       c.appendChild(el('span','name','  '+a.adapter));
       var t=tagFor(a);c.appendChild(el('span','tag '+t[1],t[0]));
       var b=el('button','small','Copy');b.type='button';
+      var codeEl=c.firstChild;
       b.addEventListener('click',function(){
-        if(navigator.clipboard)navigator.clipboard.writeText(url).then(function(){b.textContent='Copied'});
+        copyText(url,codeEl,function(ok){
+          b.textContent=ok?'Copied':'Press Ctrl+C';
+          setTimeout(function(){b.textContent='Copy'},4000);
+        });
       });
       c.appendChild(b);x.appendChild(c);
     });

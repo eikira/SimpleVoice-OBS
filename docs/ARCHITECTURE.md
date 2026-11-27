@@ -24,6 +24,7 @@ SimpleVoice OBS has three parts that ship together in one installer.
 |---|---|
 | `main.go` | Command line flags, settings file, start-up. `version` constant. |
 | `server.go` | The extension and OBS protocol: `/overlay.html`, `/overlay.js`, `/events` (SSE), `/send`, `/status`, `/tts` (proxy to VoiceStudio), `/info`, `/open-folder`, `/shutdown`. `protocolVersion = 2`. |
+| `soundbites.go`, `soundbites_http.go` | Soundbites: clip library (`soundbites/` in the data folder), splitting a message at `:name:`, joining speech and clips into one WAV, panel API `/api/soundbites*`, public list `/v1/soundbites`. |
 | `speech.go` | VoiceStudio-compatible API (`/v1/audio/speech`, `/v1/audio/voices` (`{id, name, min_speed}`), `/v1/models`) and the panel API (`/api/...`). |
 | `engine.go` | Starts, supervises and talks to `worker.py`. States: starting, ready, error. Modes: `auto`, `gpu`, `cpu`. Automatic fallback to the processor engine when the graphics card engine fails. |
 | `voices.go` | The voices folder: a voice is `Name.wav` plus `Name.txt` (the exact words). Import checks, rename, listing. |

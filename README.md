@@ -1,10 +1,10 @@
 # SimpleVoice OBS
 
-Read your stream chat aloud in a cloned voice, on your own PC, with OBS. Free and open source (GPL-3.0).
+Read your stream chat aloud in a cloned voice, on your own computer, with OBS. Free and open source (GPL-3.0).
 
 SimpleVoice OBS is one installer that sets up everything: a small background program (the **SimpleVoice OBS Relay**), a
 voice engine, and a control panel in your browser where you add voices and test them. It works together with the
-**VoiceStudio+SimpleVoice OBS Connector** Chrome extension and the OBS Browser Source, exactly as the VoiceStudio setup
+**VoiceStudio+SimpleVoice OBS Connector** Chrome or Firefox extension and the OBS Browser Source, exactly as the VoiceStudio setup
 does, so nothing else has to change.
 
 > **Non-commercial use only.** The voice model (OmniVoice) is licensed CC-BY-NC. Only clone voices you are allowed to clone.
@@ -25,28 +25,38 @@ does, so nothing else has to change.
 
 | | |
 |---|---|
-| System | Windows 10 or 11, 64 bit |
-| Voice cloning | NVIDIA GTX 16 series, RTX 20 series or newer, with 6 GB video memory or more |
+| System | Windows 10 or 11 (64 bit); Linux (64 bit Intel/AMD, with a desktop and a web browser); macOS on Apple Silicon (M1 or newer; **mostly untested**, see below) |
+| Voice cloning | NVIDIA RTX 20 series or newer, with 6 GB video memory or more (GTX 16 series works, but is very slow and not recommended); on a Mac the Apple GPU, 16 GB of memory or more recommended |
 | Any other PC | The processor engine is installed instead: built-in voices, no cloning, no transcription |
-| Disk space | about 11.4 GB for everything, about 0.5 GB for the processor engine only (estimates) |
-| Download | about 8.3 GB for everything, about 0.26 GB for the processor engine only (estimates) |
+| Disk space | about 11.4 GB for everything, about 0.5 GB for the processor engine only, about 0.25 GB for soundbites only (estimates) |
+| Download | about 8.3 GB for everything, about 0.26 GB for the processor engine only, about 0.1 GB for soundbites only (estimates) |
 
-Older NVIDIA cards (GTX 10 series and before) and AMD or Intel graphics cards cannot use the graphics card engine.
-Setup detects this and installs only the processor engine, without downloading anything that only the graphics card engine needs.
+Older NVIDIA cards (GTX 10 series and before) and AMD or Intel graphics cards cannot use the graphics card engine. Setup detects this and installs only the processor engine, without downloading anything that only the graphics card engine needs.
 
 ## Install
 
-1. Download `SimpleVoice-OBS-Setup-<version>-Windows.zip` from the releases page and unzip it.
-2. Double-click `SimpleVoice-OBS-Setup.exe`, tick what you want, accept the licence note, click **Install**.
+1. Download the zip for your system from the releases page and unzip it: `SimpleVoice-OBS-Setup-<version>-Windows.zip`, `-Linux.zip` or `-macOS.zip`.
+2. Start the Setup (Windows: double-click `SimpleVoice-OBS-Setup.exe`; Linux and macOS: make the file executable with `chmod +x` and run it), tick what you want (**Soundbites only (smallest)** unticks every voice engine: only sound clips for emotes will play, no speech), accept the licence note if the voice model is ticked, click **Install**. The size shown updates with what you tick.
 3. When it finishes, the control panel opens. Add a voice and press **Generate** in the Test section.
-4. In the **VoiceStudio+SimpleVoice OBS Connector** extension (0.3.0 or newer) open Settings, section 2, choose **SimpleVoice OBS** (or click **Detect**), then click **Load voices** in section 3.
-   Keep your OBS Browser Source URL as it is. (Extension 0.1.1 has no choice yet: there, set *VoiceStudio address* to `http://127.0.0.1:8787`. Updating to 0.3.0 is recommended.)
+4. In the **VoiceStudio+SimpleVoice OBS Connector** extension (0.3.1 recommended) open Settings, section 2, choose **SimpleVoice OBS** (or click **Detect**), then click **Load voices** in section 3. Keep your OBS Browser Source URL as it is.
 
-Setup needs no administrator rights. It installs to `%LOCALAPPDATA%\SimpleVoice-OBS`. If Windows or your firewall asks,
-click Allow for the program and for `python.exe`.
+Setup needs no administrator rights and does not send anything anywhere. Where it installs:
 
-During install, Setup downloads from python.org, pypi.org and files.pythonhosted.org, download.pytorch.org,
-huggingface.co and github.com. Nothing is sent anywhere. The relay is designed to work offline after install (not verified on every setup).
+| System | Program and engine | Extras |
+|---|---|---|
+| Windows | `%LOCALAPPDATA%\SimpleVoice-OBS` | Start menu entry, optional desktop icon and start with Windows. If Windows or your firewall asks, click Allow for the program and for `python.exe`. |
+| Linux | `~/.local/share/SimpleVoice-OBS` | Menu entry, desktop icon, start at login. If another computer cannot reach the relay, allow its port in the firewall (the control panel and the network page show the command). |
+| macOS | `~/Applications/SimpleVoice OBS.app` | Launcher app, desktop shortcut where possible, start at login. macOS may refuse an unsigned program at first (right-click, Open). |
+
+During install, Setup downloads from python.org (Linux and macOS: github.com), pypi.org, files.pythonhosted.org, download.pytorch.org (Windows), huggingface.co and github.com. The relay is designed to work offline after install (not verified on every setup).
+
+**macOS is mostly untested.** The owner installed it on an Apple Silicon Mac and the test voices worked. Not tested: voice cloning, the extension together with the relay, the desktop shortcut, a second Mac, and Intel Macs (not supported).
+
+## Soundbites (beta)
+
+New in 1.0.4. Soundbites work in the author's tests but have had little real-world use, so expect rough edges and tell us what breaks. They do not change how your voices and normal speech work.
+
+Play a sound clip for an emote written like `:choppa:` (Rumble style). In the control panel, section *Soundbites (beta)*, give the emote name (without colons), choose a sound file (up to 15 seconds) and set a volume. A chat message with `:choppa:` plays the clip; text before and after it is spoken in the written order (speech, clip, speech) as one piece. A stereo clip stays stereo. Needs extension 0.3.1.
 
 ## Another computer: listening address
 

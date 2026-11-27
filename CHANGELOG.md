@@ -3,6 +3,21 @@
 Version numbers: the first production release is 1.0.0. Updates go up by 0.0.1 (1.0.1, 1.0.2, ... 1.0.9), then 1.1.0.
 Each entry says what changed and what is **not verified**.
 
+## 1.0.4
+
+Works with extension 0.3.1 (soundbites need it), and 0.3.0 / 0.2.0 for everything else. Installers for Windows, Linux and macOS (Apple Silicon).
+
+- **New (beta): Soundbites.** Control panel section "Soundbites (beta)". Add a sound file under an emote name (for example `choppa` for `:choppa:`) with a volume; Play and Remove for each. A message that contains `:choppa:` plays the clip. A message with clips is answered as ONE audio file: every spoken piece is made first, then pieces and clips are joined with short gaps, so the order is always as written. A message of only clips needs no valid voice. An unknown `:name:` is spoken as text as before.
+- **Soundbites keep their format:** a clip keeps its sample rate (up to 48 kHz) and its channels (mono or stereo; more than 2 channels become stereo). A message of only clips plays in the clip's own format. In a message with speech and a stereo clip the file is stereo: the speech is repeated in both channels, the clip keeps left and right.
+- Limits: a clip is at most 15 seconds, at most 6 clips are played from one message (further ones are dropped), at most 30 seconds of clips per message, at most 300 clips. Names: letters, digits, `-` and `_`, up to 40 characters, not case sensitive. Clips are stored in the program's data folder (`soundbites/`; Windows `%LOCALAPPDATA%\SimpleVoiceOBS`, Linux `~/.config/SimpleVoiceOBS`). An update keeps them. New address `/v1/soundbites` lists the clip names (the extension uses it).
+- **New: Setup choice "Soundbites only":** untick every engine (or click "Soundbites only (smallest)") to install just the relay, Python and ffmpeg: about 0.1 GB download, 0.25 GB on disk. Sound clips play; text is not read aloud. The control panel says "Soundbites only" until an engine is added by running Setup again. The licence box is shown only when the voice model is ticked.
+- **New: Linux Setup** (64 bit Intel/AMD): install folder `~/.local/share/SimpleVoice-OBS`, menu entry, desktop icon, start at login. The network page and the control panel show a firewall hint on Linux.
+- **New: macOS Setup** (Apple Silicon): standalone Python, PyTorch with the Apple GPU (MPS), launcher app in `~/Applications`, start at login.
+- **GTX 16 series:** Setup, the component list and the README say that these cards work but are very slow and not recommended. Setup marks such a card as "low".
+- **Fixed: the Copy button on the "Listening address" page** copied nothing when the page was opened over a network address (the browser only allows its copy function on secure pages). It now uses a fallback, shows "Copied" only when it worked, otherwise selects the address and shows "Press Ctrl+C".
+- **Setup:** Copy log button (for error reports).
+- **Not verified:** Windows run of this exact build; Linux Setup on a real Linux computer (never run on one); **macOS is mostly untested** (the owner's install and test voices worked; voice cloning, the extension with the relay and the desktop shortcut were not tried); soundbites with real voices in OBS and how OBS plays a 2-channel file; what Uninstall does with the clips; Rumble messages with several emotes; the Copy button in a real browser.
+
 ## 1.0.3
 
 - **Firewall question:** when the relay starts on a network address, it makes one short connection attempt from that address to the gateway of that network (port 80; the answer does not matter, and nothing goes to the internet). A firewall such as Windows Firewall or simplewall only asks about a program when it sees its traffic; listening alone shows nothing. The log says what happened ("Firewall check: ..."). Never done in "this PC only" mode. The page `/network` says that the firewall may ask and to allow it for the private network. Same change as in the standalone relay 0.1.0.

@@ -213,6 +213,16 @@ func (e *engine) start() {
 	go func() { defer e.wg.Done(); e.supervise(done) }()
 }
 
+// anyEngineFiles reports whether the graphics card engine or the processor engine is installed at all.
+func (e *engine) anyEngineFiles() bool {
+	for _, p := range []string{e.cfg.model, e.cfg.kokoro} {
+		if _, err := os.Stat(p); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 func (e *engine) supervise(done chan struct{}) {
 	for fails := 0; fails < 5; fails++ {
 		select {
@@ -243,6 +253,11 @@ func (e *engine) supervise(done chan struct{}) {
 				e.addLog("The graphics card engine files are missing. Using the processor engine.")
 				fails--
 				continue
+			}
+			if missing != e.cfg.python && missing != e.cfg.script && !e.anyEngineFiles() {
+				e.set("missing", "Soundbites only: no voice engine is installed, so sound clips play but text is not read aloud. Run Setup again to add an engine.")
+				e.addLog("No voice engine is installed (soundbites only).")
+				return
 			}
 			e.set("missing", "Engine files not found: "+missing+". Run Setup again.")
 			e.addLog("Engine files not found: " + missing)

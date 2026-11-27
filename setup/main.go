@@ -189,17 +189,7 @@ func (s *server) handleStart(w http.ResponseWriter, r *http.Request) {
 	if s.hw != nil && !s.hw().Usable { // no card this build can use: nothing that only the graphics card engine needs
 		sel.GPU, sel.ASR = false, false
 	}
-	list, _ := s.parts()
-	haveEngine := sel.CPU || sel.GPU
-	for _, c := range list {
-		if c.Installed && (c.ID == "cpu" || c.ID == "gpu") {
-			haveEngine = true
-		}
-	}
-	if !haveEngine {
-		http.Error(w, "Tick at least one engine: the processor engine or the graphics card engine.", http.StatusBadRequest)
-		return
-	}
+	// No engine ticked is allowed: that is the "soundbites only" install (relay, Python, ffmpeg).
 	s.setSel(sel)
 	s.setOpts(options{Desktop: body.Desktop, Autostart: body.Autostart})
 	if !s.begin("install") {
@@ -225,6 +215,13 @@ func (s *server) handleUninstall(w http.ResponseWriter, r *http.Request) {
 }
 
 func defaultDir() string {
+	if isUnix {
+		home, _ := os.UserHomeDir()
+		if isLinux {
+			return filepath.Join(home, ".local", "share", "SimpleVoice-OBS")
+		}
+		return filepath.Join(home, "Library", "SimpleVoice-OBS") // no spaces in the path: Python tools dislike them
+	}
 	if d := os.Getenv("LOCALAPPDATA"); d != "" {
 		return filepath.Join(d, "SimpleVoice-OBS")
 	}

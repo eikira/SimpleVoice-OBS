@@ -71,6 +71,7 @@ func newEnvMode(t *testing.T, mode string) *env {
 	r := newRelay(eng, voiceStore{dir: vdir})
 	r.ffmpeg = findFFmpeg(dir, "")
 	r.drafts = filepath.Join(dir, "drafts")
+	r.sounds = newSoundbites(filepath.Join(dir, "soundbites"))
 	eng.start()
 	srv := httptest.NewServer(r)
 	t.Cleanup(func() { srv.Close(); eng.stop() })
@@ -1412,5 +1413,19 @@ func TestVoiceListTellsTheSlowestSpeed(t *testing.T) {
 	resp2, b2 := gpu.speak(t, `{"input":"This is a sentence of some length.","voice":"anna","speed":0.8}`, nil)
 	if resp.StatusCode != 200 || resp2.StatusCode != 200 || len(b) != len(b2) {
 		t.Fatalf("an imported voice asked for 0.5 is made at 0.8: %d vs %d bytes", len(b), len(b2))
+	}
+}
+
+func TestEngineSoundbitesOnlyMessage(t *testing.T) {
+	dir := t.TempDir()
+	py, script := filepath.Join(dir, "python"), filepath.Join(dir, "worker.py")
+	os.WriteFile(py, []byte("x"), 0o755)
+	os.WriteFile(script, []byte("x"), 0o644)
+	eng := newEngine(engineCfg{python: py, model: filepath.Join(dir, "OmniVoice"), kokoro: filepath.Join(dir, "kokoro"), script: script, steps: 16, startWait: time.Second})
+	eng.start()
+	time.Sleep(200 * time.Millisecond)
+	st := eng.status()
+	if st.State != "missing" || !strings.Contains(st.Msg, "Soundbites only") {
+		t.Fatalf("%+v", st)
 	}
 }

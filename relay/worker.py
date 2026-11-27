@@ -23,6 +23,9 @@ import time
 import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+if sys.platform == "darwin":
+    os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")  # operations the Apple GPU lacks run on the CPU instead
+
 status = {"state": "loading", "error": "", "reason": "", "device": "", "asr": "loading", "asr_error": "", "asr_device": ""}
 speak_lock = threading.Lock()  # one speech at a time
 backend = None
@@ -164,13 +167,17 @@ class OmniBackend:
         log("loading the OmniVoice code...")
         from omnivoice import OmniVoice
 
-        if not torch.cuda.is_available():
-            raise NoGPU("No NVIDIA GPU is available to PyTorch.")
+        if torch.cuda.is_available():
+            dev, name = "cuda:0", torch.cuda.get_device_name(0)
+        elif getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+            dev, name = "mps", "Apple GPU (MPS)"  # Apple Silicon Macs
+        else:
+            raise NoGPU("No NVIDIA GPU (or Apple GPU on a Mac) is available to PyTorch.")
         self.torch = torch
         log("loading the voice model onto the graphics card...")
-        self.model = OmniVoice.from_pretrained(model_dir, device_map="cuda:0", dtype=torch.float16)
+        self.model = OmniVoice.from_pretrained(model_dir, device_map=dev, dtype=torch.float16)
         self.prompts = {}  # reference voice -> prepared prompt, so each voice is analysed only once
-        status["device"] = torch.cuda.get_device_name(0)
+        status["device"] = name
         log("warming up (the first sentence is slow)...")
         try:  # first run compiles GPU kernels; do it now, not during the first chat message
             with torch.inference_mode():
